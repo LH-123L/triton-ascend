@@ -80,6 +80,7 @@ public:
     {
         if (Operation *newOp = findReplacementOp(op, values)) {
             transferAttrs(op, newOp);
+            return;
         }
     }
 
@@ -91,6 +92,8 @@ private:
         }
 
         for (Value value : replacements) {
+            if (!value)
+                continue;
             Operation *defOp = value.getDefiningOp();
             if (defOp && recentInserts.contains(defOp) && canTransferAttrs(oldOp, defOp)) {
                 return defOp;

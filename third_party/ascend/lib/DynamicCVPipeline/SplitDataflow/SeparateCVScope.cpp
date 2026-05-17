@@ -520,9 +520,9 @@ static LogicalResult neutralizeYieldInRegion(Operation *op, const CoreTypeInfo &
                 Value oldOperand = yieldOp.getOperand(i);
                 if (i < op->getNumResults()) {
                     if (Operation *resultUser = findLiveUser(op->getResult(i), scopeType)) {
-                        yieldOp.emitWarning() << "skip neutralizing yield operand #" << i << " for scope " << scopeType
-                                              << " because parent result #" << i << " still has live user '"
-                                              << resultUser->getName().getStringRef() << "'";
+                        logDebug("skip neutralizing yield operand #", i, " for scope ", scopeType,
+                                 " because parent result #", i, " still has live user '",
+                                 resultUser->getName().getStringRef(), "'");
                         continue;
                     }
                 }
@@ -549,9 +549,8 @@ static LogicalResult neutralizeTerminatorUses(Operation *op, const CoreTypeInfo 
 
         Value result = op->getResult(i);
         if (Operation *extraUser = findNonTermUser(result, scopeType)) {
-            op->emitWarning() << "skip neutralizing result #" << i << " for scope " << scopeType
-                              << " because the value still has live user '" << extraUser->getName().getStringRef()
-                              << "'";
+            logDebug("skip neutralizing result #", i, " for scope ", scopeType,
+                     " because the value still has live user '", extraUser->getName().getStringRef(), "'");
             continue;
         }
 
