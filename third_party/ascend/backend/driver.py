@@ -503,9 +503,10 @@ def generate_npu_wrapper_src(constants, signature, metadata):
     """
     args:
         int gridX, gridY, gridZ;
-        rtStream_t stream;
-        const void *functon;
-        PyObject* packed_metadata,       
+        aclrtStream stream;
+        aclrtFuncHandle functon;
+        PyObject* packed_metadata, *launch_metadata;
+        PyObject* launch_enter_hook, *launch_exit_hook;
         *args_expand
     """
 
@@ -757,16 +758,21 @@ extern "C" {
 """
 
     cpp_kernel_launch = f"""
-    ret = rtKernelLaunch(func, blockNum, static_cast<void*>(launch_args.data()), launch_args.size(), NULL, stream);
+    ret = aclrtLaunchKernelWithHostArgs(func, blockNum, stream, nullptr, launch_args.data(), launch_args.size(), nullptr, 0);
 """
     if compile_on_910_95 and enable_simt:
         cpp_kernel_launch = f"""
-    rtArgsEx_t argsInfo = {{}};
-    argsInfo.args = static_cast<void*>(launch_args.data());
-    argsInfo.argsSize = launch_args.size();
-    rtTaskCfgInfo_t cfgInfo = {{}};
-    cfgInfo.localMemorySize = {metadata.shared_mem_dynamic_size};
-    ret = rtKernelLaunchWithFlagV2(func, blockNum, &argsInfo, NULL, stream, 0, &cfgInfo);
+    aclrtLaunchKernelAttr attrInfo = {{}};
+    attrInfo.id = ACL_RT_LAUNCH_KERNEL_ATTR_DYN_UBUF_SIZE;
+    aclrtLaunchKernelAttrValue value = {{}};
+    value.localMemorySize = {metadata.shared_mem_dynamic_size};
+    attrInfo.value = value;
+    
+    aclrtLaunchKernelCfg cfgCfgInfo = {{}};
+    cfgCfgInfo.attrs = attrInfo;
+    cfgCfgInfo.numAttrs = 1;
+    
+    ret = aclrtLaunchKernelWithHostArgs(func, blockNum, stream, &cfgCfgInfo, launch_args.data(), launch_args.size(), nullptr, 0);
 """
 
     precompile_headers = f"""
@@ -793,7 +799,7 @@ static inline size_t _align_launch_offset(size_t offset, size_t alignment) {{
 
 extern "C" {{
 void triton_launch_kernel(
-    const char* kernelName, const void* func, rtStream_t stream,
+    const char* kernelName, aclrtFuncHandle func, aclrtStream stream,
     int gridX, int gridY, int gridZ,
     const int64_t* shapes_data, const int* shape_dims, int num_tensors,
     const int* tensor_kinds,
@@ -829,8 +835,7 @@ void triton_launch_kernel(
   // only 1D parallelization is supported for NPU
   // Pointer type becomes flattend 1-D Memref tuple: base_ptr, data_ptr, offset, shape, stride
   // base_ptr offset shape and stride are not used, arbitrarily set for now
-  std::string name = "";
-  name.append(kernelName);
+  static std::string name(kernelName);
   void *workspace_addr_ptr = NULL;
   {coalesce_grid_div}
   uint32_t blockNum4Workspace = gridX * gridY * gridZ;
@@ -839,7 +844,7 @@ void triton_launch_kernel(
   uint64_t totalWorkSpaceSize = {workspace_size} * blockNum4Workspace;
   {get_backend_func("allocate_memory", "totalWorkSpaceSize", "stream")}
   ''' if workspace_size > 0 else ''}
-  {'auto launch_call = [=]() -> rtError_t' if enable_taskqueue else ''} {{
+  {'auto launch_call = [=]() -> aclError' if enable_taskqueue else ''} {{
     {get_backend_func("pre_launch", False)}
     uint32_t blockNum = gridX * gridY * gridZ;
 
@@ -856,9 +861,9 @@ void triton_launch_kernel(
     uint32_t nodeBasicBlockDim = (mixBlockNumRation << 16) + blockNum;
 
     {'cce::internal::DebugTunnelData *DTData = cce::internal::DebugTunnel::Open(blockNum);' if enable_device_print else ''}
-    rtError_t ret = RT_ERROR_NONE;
-    {'void *ffts_addr = NULL; uint32_t ffts_len; ret = rtGetC2cCtrlAddr((uint64_t*)&ffts_addr, &ffts_len);' if target_support_ffts else ''}
-    {'if (ret != RT_ERROR_NONE) return ret;' if (target_support_ffts and enable_taskqueue) else 'if (ret != RT_ERROR_NONE) return;' if (target_support_ffts and (not enable_taskqueue)) else ''}
+    aclError ret = ACL_SUCCESS;
+    {'void *ffts_addr = NULL; uint32_t ffts_len; ret = aclrtGetHardwareSyncAddr(&ffts_addr);' if target_support_ffts else ''}
+    {'if (ret != ACL_SUCCESS) return ret;' if (target_support_ffts and enable_taskqueue) else 'if (ret != ACL_SUCCESS) return;' if (target_support_ffts and (not enable_taskqueue)) else ''}
     // stub argument for workspace
     void *syncBlockLock_ptr = NULL;
     uint16_t ModuleId = 0;
@@ -869,16 +874,16 @@ void triton_launch_kernel(
       {alloc_success_code if enable_taskqueue else sync_lock_fail_code}
     }}
     std::vector<int64_t> lockInitData({lock_num}, {lock_init_value});
-    ret = rtMemcpy(
+    ret = aclrtMemcpy(
         syncBlockLock_ptr, syncBlockLockSize,
         reinterpret_cast<void *>(lockInitData.data()), syncBlockLockSize,
-        RT_MEMCPY_HOST_TO_DEVICE
+        ACL_MEMCPY_HOST_TO_DEVICE
     );
-    if (ret != RT_ERROR_NONE) {{
+    if (ret != ACL_SUCCESS) {{
       return {'ret' if enable_taskqueue else ''};
     }}
     ''' if lock_num > 0 else ''}
-    {'if (ret != RT_ERROR_NONE) return ret;' if (workspace_size > 0 and enable_taskqueue) else 'if (ret != RT_ERROR_NONE) return;' if (workspace_size > 0 and not enable_taskqueue) else ''}
+    {'if (ret != ACL_SUCCESS) return ret;' if (workspace_size > 0 and enable_taskqueue) else 'if (ret != ACL_SUCCESS) return;' if (workspace_size > 0 and not enable_taskqueue) else ''}
 
     size_t args_offset = 0;
     auto reserve_slot = [&](size_t size, size_t alignment) -> size_t {{
@@ -923,14 +928,14 @@ void triton_launch_kernel(
     {'void *&stream_ref = const_cast<void*&>(stream);' if enable_device_print else ''}
     {'cce::internal::DebugTunnel::Close(DTData, stream_ref);' if enable_device_print else ''}
     {cpp_msprof_call_after_launch}
-    {'return ret;' if enable_taskqueue else 'ret = rtStreamSynchronize(stream);'}
+    {'return ret;' if enable_taskqueue else 'ret = aclrtSynchronizeStream(stream);'}
    }};
    {f'''{get_backend_func("async_launch", "launch_call") if enable_taskqueue else ''}'''}
   return;
 }}
 }} // extern "C"
 
-static void _launch(const char* kernelName, const void* func, rtStream_t stream, int gridX, int gridY, int gridZ, std::vector<std::vector<int64_t>> &tensorShapes, std::vector<int> &tensorKinds{', ' + arg_decls if len(signature) > 0 else ''}) {{
+static void _launch(const char* kernelName, aclrtFuncHandle func, aclrtStream stream, int gridX, int gridY, int gridZ, std::vector<std::vector<int64_t>> &tensorShapes, std::vector<int> &tensorKinds{', ' + arg_decls if len(signature) > 0 else ''}) {{
   std::vector<int64_t> flat_tensor_shapes;
   std::vector<int> shape_dims;
   for (const auto &tensor_shape : tensorShapes) {{
@@ -982,8 +987,8 @@ static std::vector<int64_t> _get_tensor_shape(PyObject *tensor) {{
 
 static PyObject* launch(PyObject* self, PyObject* args) {{
   int gridX, gridY, gridZ;
-  rtStream_t stream;
-  const void *function;
+  aclrtStream stream;
+  aclrtFuncHandle function;
   PyObject *packedMetadata = NULL;
   PyObject *launch_metadata = NULL;
   PyObject *launch_enter_hook = NULL;
