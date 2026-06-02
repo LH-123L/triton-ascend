@@ -20,7 +20,6 @@
 
 from .autotuner import get_max_configs, max_autotune
 
-
 def _patch_autotune():
     try:
         import triton
@@ -32,4 +31,15 @@ def _patch_autotune():
     triton.autotune = autotune
 
 
+def _patch_jit():
+    try:
+        import triton
+    except ImportError:
+        return
+
+    from .jit import ascend_jit
+
+    triton.jit = ascend_jit
+    
+_patch_jit()
 _patch_autotune()
