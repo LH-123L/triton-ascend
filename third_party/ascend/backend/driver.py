@@ -28,6 +28,8 @@ import sysconfig
 from typing import Optional
 import functools
 import hashlib
+import torch
+import torch_npu
 from triton.runtime.cache import get_cache_manager, get_dump_manager, default_cache_dir
 from triton.backends.driver import DriverBase
 from triton.backends.compiler import GPUTarget
@@ -186,21 +188,26 @@ class NPUDriver(DriverBase):
         """
         Get current device
         """
-        return get_backend_func("get_current_device")
+        return torch.npu.current_device()
 
     def set_current_device(self, device):
         """
         Set current device as the given device
         """
-        return get_backend_func("set_current_device", device)
+        return torch.npu.set_device(device)
 
     def get_current_stream(self, device: Optional[int] = None) -> int:
         """
         Get stream for current device
         """
-        # According to torch_npu, the content of a torch.npu.Stream is essentilly an rtStream_t
-        # TODO: use CANN API instead of torchnpu
-        return get_backend_func("get_current_stream", device)
+        if device is None:
+            device = torch.npu.current_device()
+        if hasattr(torch_npu._C, "_npu_getCurrentRawStreamNoWait"):
+            from torch_npu._C import _npu_getCurrentRawStreamNoWait
+            return _npu_getCurrentRawStreamNoWait(device)
+        else:
+            from torch_npu._C import _npu_getCurrentRawStream
+            return _npu_getCurrentRawStream(device)
 
     def get_benchmarker(self):
         from triton.testing import do_bench
