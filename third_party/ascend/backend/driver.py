@@ -186,21 +186,32 @@ class NPUDriver(DriverBase):
         """
         Get current device
         """
-        return get_backend_func("get_current_device")
+        import torch
+        import torch_npu
+        return torch.npu.current_device()
 
     def set_current_device(self, device):
         """
         Set current device as the given device
         """
-        return get_backend_func("set_current_device", device)
+        import torch
+        import torch_npu
+        return torch.npu.set_device(device)
 
     def get_current_stream(self, device: Optional[int] = None) -> int:
         """
         Get stream for current device
         """
-        # According to torch_npu, the content of a torch.npu.Stream is essentilly an rtStream_t
-        # TODO: use CANN API instead of torchnpu
-        return get_backend_func("get_current_stream", device)
+        import torch
+        import torch_npu
+        if device is None:
+            device = torch.npu.current_device()
+        if hasattr(torch_npu._C, "_npu_getCurrentRawStreamNoWait"):
+            from torch_npu._C import _npu_getCurrentRawStreamNoWait
+            return _npu_getCurrentRawStreamNoWait(device)
+        else:
+            from torch_npu._C import _npu_getCurrentRawStream
+            return _npu_getCurrentRawStream(device)
 
     def get_benchmarker(self):
         from triton.testing import do_bench
@@ -505,7 +516,8 @@ def generate_npu_wrapper_src(constants, signature, metadata):
         int gridX, gridY, gridZ;
         rtStream_t stream;
         const void *functon;
-        PyObject* packed_metadata,       
+        PyObject* packed_metadata, *launch_metadata;
+        PyObject* launch_enter_hook, *launch_exit_hook;
         *args_expand
     """
 
