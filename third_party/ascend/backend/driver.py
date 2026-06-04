@@ -505,7 +505,8 @@ def generate_npu_wrapper_src(constants, signature, metadata):
         int gridX, gridY, gridZ;
         aclrtStream stream;
         aclrtFuncHandle functon;
-        PyObject* packed_metadata,       
+        PyObject* packed_metadata, *launch_metadata;
+        PyObject* launch_enter_hook, *launch_exit_hook;
         *args_expand
     """
 
@@ -746,14 +747,14 @@ extern "C" {
     aclrtLaunchKernelAttr attrInfo = {{}};
     attrInfo.id = ACL_RT_LAUNCH_KERNEL_ATTR_DYN_UBUF_SIZE;
     aclrtLaunchKernelAttrValue value = {{}};
-    value.dynUbufSize = {metadata.shared_mem_dynamic_size};
+    value.localMemorySize = {metadata.shared_mem_dynamic_size};
     attrInfo.value = value;
     
     aclrtLaunchKernelCfg cfgCfgInfo = {{}};
     cfgCfgInfo.attrs = attrInfo;
     cfgCfgInfo.numAttrs = 1;
     
-    ret = aclrtLaunchKernelWithHostArgs(func, blockNum, stream, nullptr, launch_args.data(), launch_args.size(), &cfgCfgInfo, 0);
+    ret = aclrtLaunchKernelWithHostArgs(func, blockNum, stream, &cfgCfgInfo, launch_args.data(), launch_args.size(), nullptr, 0);
 """
 
     precompile_headers = f"""
@@ -816,8 +817,7 @@ void triton_launch_kernel(
   // only 1D parallelization is supported for NPU
   // Pointer type becomes flattend 1-D Memref tuple: base_ptr, data_ptr, offset, shape, stride
   // base_ptr offset shape and stride are not used, arbitrarily set for now
-  std::string name = "";
-  name.append(kernelName);
+  static std::string name(kernelName);
   void *workspace_addr_ptr = NULL;
   uint32_t blockNum4Workspace = gridX * gridY * gridZ;
   {get_backend_func("pre_launch", True)}
