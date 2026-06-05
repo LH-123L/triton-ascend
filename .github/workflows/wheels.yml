@@ -28,8 +28,8 @@ jobs:
         - {runs_on: 'ubuntu-22.04-arm', arch: 'aarch64'}
         python: ["cp310", "cp311", "cp312", "cp313"]
         branch:
-        - {ref: 'main', tag: 'main', local: 'dev'}
-        - {ref: 'release/3.2.2', tag: 'release-3.2.2', local: 'release'}
+        - {ref: 'main', tag: 'main', local: 'dev', path: '.'}
+        - {ref: 'release/3.2.2', tag: 'release-3.2.2', local: 'release', path: 'python'}
 
     permissions:
       id-token: write
@@ -57,14 +57,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/.triton-cache
-            ${{ github.workspace }}/.ccache
+            ${{ github.workspace }}/${{ matrix.branch.path }}/.triton-cache
+            ${{ github.workspace }}/${{ matrix.branch.path }}/.ccache
           key: wheels-${{ matrix.config.arch }}-${{ matrix.python }}-${{ hashFiles('cmake/llvm-hash.txt', 'cmake/json-version.txt', 'cmake/nvidia-toolchain-version.json', 'third_party/ascend/llvm_patch/*.patch') }}
           restore-keys: |
             wheels-${{ matrix.config.arch }}-${{ matrix.python }}-
 
       - name: Build wheels
-        if: github.event_name != 'pull_request' || matrix.branch.ref == github.base_ref
         run: |
           python --version
           # Make sure cibuildwheel is updated to latest, this will enable latest python builds
@@ -77,7 +76,7 @@ jobs:
 
           # Pre-create cache dirs on host so cibuildwheel's bind-mount sees them
           # at /project/.triton-cache and /project/.ccache inside the container.
-          mkdir -p .triton-cache .ccache
+          mkdir -p "${{ matrix.branch.path }}/.triton-cache" "${{ matrix.branch.path }}/.ccache"
 
           # Wheel version: <base>rc3+devYYYYMMDD. Compute the build date once on
           # the host (UTC) so all matrix cells agree even if they straddle
@@ -112,10 +111,9 @@ jobs:
 
           export CIBW_BUILD="${{ matrix.python }}-manylinux_${{ matrix.config.arch }}"
 
-          python3 -m cibuildwheel . --output-dir wheelhouse
+          python3 -m cibuildwheel "${{ matrix.branch.path }}" --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request' || matrix.branch.ref == github.base_ref
         with:
           name: cibw-wheels-manylinux_2_28_${{ matrix.config.arch }}-${{ matrix.python }}-${{ matrix.branch.tag }}-wheels-upload
           path: ./wheelhouse/*.whl
