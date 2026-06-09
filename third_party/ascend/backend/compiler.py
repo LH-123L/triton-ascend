@@ -1064,6 +1064,8 @@ def ttir_to_npubin(mod, metadata, opt):
             #  2.if that config key is absent ,fail back to the kernel-time
             #    user-specified simt_stack_limit
             _simt_stack_limit = opt.simt_stack_limit
+            import  time
+            start_time=time.perf_counter()
             try:
                 import torch_npu
                 torch_npu_basic_path = os.path.dirname(torch_npu.__file__)
@@ -1075,6 +1077,9 @@ def ttir_to_npubin(mod, metadata, opt):
                     _simt_stack_limit = _cfg_stack
             except Exception as e:
                 print(f"[DEBUG] read acl_default.json failed: {e}")
+            print(f"opt.simt_stack_limit={opt.simt_stack_limit},_simt_stack_limit={_simt_stack_limit}")
+            time = (time.perf_counter()-start_time)*1e6
+            print(f"[DEBUG] time: {time:.6f}us")
             if _simt_stack_limit is not None:
                 _compile_option_list += [f"--simt-stack-limit={_simt_stack_limit}"]
             if opt.shared_mem_dynamic_size is not None:

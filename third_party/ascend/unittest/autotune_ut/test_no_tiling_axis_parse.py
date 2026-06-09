@@ -67,6 +67,28 @@ def triton_permute_2d(output_ptr,
     tl.store(output_ptr + o_offs, ret, mask=o_mask)
 
 
+@triton.jit
+def triton_permute_2d_no_autotune(output_ptr,
+                      x_ptr,
+                      xnumel: tl.constexpr,
+                      ynumel: tl.constexpr,
+                      XBLOCK: tl.constexpr,
+                      YBLOCK: tl.constexpr, ):
+    xpid = tl.program_id(0)
+    ypid = tl.program_id(1)
+
+    x_off = xpid * XBLOCK + tl.arange(0, XBLOCK)[:, None]
+    y_off = ypid * YBLOCK + tl.arange(0, YBLOCK)[None, :]
+    mask = (x_off < xnumel) & (y_off < ynumel)
+    offs = y_off + x_off * ynumel
+    b = tl.load(x_ptr + offs, mask=mask)
+    ox_off = ypid * YBLOCK + tl.arange(0, YBLOCK)[:, None]
+    oy_off = xpid * XBLOCK + tl.arange(0, XBLOCK)[None, :]
+    o_mask = (ox_off < ynumel) & (oy_off < xnumel)
+    o_offs = oy_off + ox_off * xnumel
+    ret = tl.permute(b, (1, 0))
+    tl.store(output_ptr + o_offs, ret, mask=o_mask)
+
 def case_triton(x_cal, is_simt_only=False):
     xnumel = x_cal.shape[0]
     ynumel = x_cal.shape[1]
@@ -77,6 +99,20 @@ def case_triton(x_cal, is_simt_only=False):
     else:
         (triton_permute_2d[lambda meta: (triton.cdiv(xnumel, meta['XBLOCK']), triton.cdiv(ynumel, meta['YBLOCK']), 1)]
          (output, x_cal, xnumel, ynumel))
+    return output
+
+def case_triton_no_autotune(x_cal, is_simt_only=False):
+    xnumel = x_cal.shape[0]
+    ynumel = x_cal.shape[1]
+    output = torch.randint(1, (ynumel, xnumel), dtype=x_cal.dtype, device=x_cal.device)
+    XBLOCK = 64
+    YBLOCK = 32
+    if is_simt_only:
+        (triton_permute_2d_no_autotune[lambda meta: (triton.cdiv(xnumel, XBLOCK), triton.cdiv(ynumel, YBLOCK), 1)]
+         (output, x_cal, xnumel, ynumel, XBLOCK, YBLOCK,force_simt_only=True))
+    else:
+        (triton_permute_2d_no_autotune[lambda meta: (triton.cdiv(xnumel, XBLOCK), triton.cdiv(ynumel, YBLOCK), 1)]
+         (output, x_cal, xnumel, ynumel, XBLOCK, YBLOCK))
     return output
 
 
@@ -96,4 +132,14 @@ def test_permute_simt(shape, dtype):
     x_cal = test_common.generate_tensor(shape, dtype).npu()
     torch_output = case_torch(x_cal)
     triton_output = case_triton(x_cal, True)
+    torch.testing.assert_close(torch_output, triton_output, rtol=1e-03, atol=1e-03, equal_nan=True)
+
+
+@pytest.mark.skipif(not is_compile_on_910_95, reason="only support A5")
+@pytest.mark.parametrize('shape', [(1024, 32)])
+@pytest.mark.parametrize('dtype', ['bfloat16'])
+def test_permute_simt_no_autotune(shape, dtype):
+    x_cal = test_common.generate_tensor(shape, dtype).npu()
+    torch_output = case_torch(x_cal)
+    triton_output = case_triton_no_autotune(x_cal, True)
     torch.testing.assert_close(torch_output, triton_output, rtol=1e-03, atol=1e-03, equal_nan=True)
