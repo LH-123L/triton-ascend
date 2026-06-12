@@ -85,8 +85,20 @@ class NPUUtils(object):
     def get_device_properties(self, device):
         # temperoarily added "max_shared_mem" properties to avoid triton-compiler complain
         # fetch available memory at runtime
-        num_aic = self.get_aicore_num()
-        num_aiv = num_aic * 2
+        npu_device_limit_str = os.getenv("NPU_DEVICE_LIMIT")
+        num_aic,num_aiv = None,None
+        if npu_device_limit_str is not None:
+            is_valid = re.match(r'^\d+(,\d+)$', npu_device_limit_str.strip())
+            if is_valid:
+                parts = [part.strip() for part in npu_device_limit_str.split(",")]
+                num_aic = parts[0]
+                num_aiv = parts[1]
+            else:
+                print("[WAINING]NPU_DEVICE_LIMIT is incorrect. expected format is 14,28.")
+                print("[WAINING]The number of aicore and vector_core are accessed via the ACL interface.")
+        if num_aic is None or num_aiv is None:
+            num_aic = self.npu_utils_mod.get_aicore_num()
+            num_aiv = num_aic * 2
         return {"max_shared_mem": 1, "num_aicore": num_aic, "num_vectorcore": num_aiv}
 
     @functools.lru_cache()
@@ -97,7 +109,7 @@ class NPUUtils(object):
     @functools.lru_cache()
     def get_aicore_num(self):
         # temporarily return empty arch descriptor
-        return self.npu_utils_mod.get_aicore_num()
+        return self.get_device_properties("npu")["num_aicore"]
 
     @functools.lru_cache()
     def get_aivector_core_num(self):
