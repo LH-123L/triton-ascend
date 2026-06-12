@@ -31,7 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "runtime/runtime/rt.h"
+#include <acl/acl.h>
 
 // Use map to differentiate same name functions from different binary
 static std::unordered_map<std::string, size_t> registered_names;
@@ -41,45 +41,42 @@ static std::tuple<void *, void *> registerKernel(const char *name,
                                                  const void *data,
                                                  size_t data_size, int device,
                                                  const char *kernel_mode_str) {
-  rtError_t rtRet;
-
-  rtDevBinary_t devbin;
-  devbin.data = data;
-  devbin.length = data_size;
+  aclError aclRet;
+    
+  aclRet = aclrtSetDevice(device);
+  if (aclRet != ACL_SUCCESS) {
+    printf("aclrtSetDevice failed, 0x%x\n", aclRet);
+    return {nullptr, nullptr};
+  }
+  
+  uint32_t magic;
   const std::string kernel_mode{kernel_mode_str};
   if (kernel_mode == "aiv")
-    devbin.magic = RT_DEV_BINARY_MAGIC_ELF_AIVEC;
+    magic = ACL_RT_BINARY_MAGIC_ELF_VECTOR_CORE;
   else
-    devbin.magic = RT_DEV_BINARY_MAGIC_ELF;
-  devbin.version = 0;
+    magic = ACL_RT_BINARY_MAGIC_ELF_AICORE;
+   
+  aclrtBinaryLoadOption optArr[] = {
+    { .type=ACL_RT_BINARY_LOAD_OPT_LAZY_LOAD, .value={ .isLazyLoad=0 } },
+    { .type=ACL_RT_BINARY_LOAD_OPT_MAGIC, .value={ .magic=magic } }
+  };
+  aclrtBinaryLoadOptions loadOptions = { .options=optArr, .numOpt=2 };
+  aclrtBinHandle binHandle = nullptr;
+  aclRet = aclrtBinaryLoadFromData(data, data_size, &loadOptions, &binHandle);
 
-  rtRet = rtSetDevice(device);
-  if (rtRet != RT_ERROR_NONE) {
-    printf("rtSetDevice failed, 0x%x\n", rtRet);
+  if (aclRet != ACL_SUCCESS) {
+    printf("aclrtBinaryLoadFromData failed, 0x%x\n", aclRet);
     return {nullptr, nullptr};
   }
 
-  void *devbinHandle = nullptr;
-  rtRet = rtDevBinaryRegister(&devbin, &devbinHandle);
-  if (rtRet != RT_ERROR_NONE) {
-    printf("rtDevBinaryRegister failed, 0x%x\n", rtRet);
+  aclrtFuncHandle funcHandle = nullptr;
+  aclRet = aclrtBinaryGetFunction(binHandle, name, &funcHandle);
+  if (aclRet != ACL_SUCCESS) {
+    printf("aclrtBinaryGetFunction failed(name = %s), 0x%x\n", name, aclRet);
     return {nullptr, nullptr};
   }
 
-  std::string stubName = name;
-  stubName += "_" + std::to_string(registered_names[name]);
-  registered_names[name]++;
-  auto registered = func_stubs.emplace(stubName, std::make_unique<size_t>(0));
-  void *func_stub_handle = registered.first->second.get();
-  rtRet = rtFunctionRegister(devbinHandle, func_stub_handle, stubName.c_str(),
-                             (void *)name, 0);
-  if (rtRet != RT_ERROR_NONE) {
-    printf("rtFunctionRegister failed(stubName = %s), 0x%x\n", stubName.c_str(),
-           rtRet);
-    return {nullptr, nullptr};
-  }
-
-  return std::make_tuple(devbinHandle, func_stub_handle);
+  return std::make_tuple(binHandle, funcHandle);
 }
 
 static PyObject *loadKernelBinary(PyObject *self, PyObject *args) {
@@ -109,27 +106,31 @@ static PyObject *loadKernelBinary(PyObject *self, PyObject *args) {
 }
 
 static PyObject *getArch(PyObject *self, PyObject *args) {
-  char name[64] = {'\0'};
+  const char* socName = aclrtGetSocName();
 
-  rtError_t rtRet = rtGetSocVersion(name, 64);
-
-  if (rtRet != RT_ERROR_NONE) {
-    printf("rtGetSocVersion failed, 0x%x", rtRet);
+  if (socName == nullptr) {
+    printf("aclrtGetSocName failed.");
     return nullptr;
   }
   if (PyErr_Occurred()) {
     return nullptr;
   }
-  return Py_BuildValue("s", name);
+  return Py_BuildValue("s", socName);
 }
 
 static PyObject *getAiCoreNum(PyObject *self, PyObject *args) {
-  uint32_t aiCoreCnt;
+  int64_t aiCoreCnt;
+  int32_t deviceId;
+  aclError aclRet = aclrtGetDevice(&deviceId);
 
-  rtError_t rtRet = rtGetAiCoreCount(&aiCoreCnt);
-
-  if (rtRet != RT_ERROR_NONE) {
-    printf("rtGetAiCoreCount failed, 0x%x", rtRet);
+  if (aclRet != ACL_SUCCESS) {
+    printf("aclrtGetDevice failed, 0x%x", aclRet);
+    return nullptr;
+  }
+  
+  aclRet = aclrtGetDeviceInfo(static_cast<uint32_t>(deviceId),ACL_DEV_ATTR_AICORE_CORE_NUM, &aiCoreCnt);
+  if (aclRet != ACL_SUCCESS) {
+    printf("aclrtGetDeviceInfo failed, 0x%x", aclRet);
     return nullptr;
   }
   if (PyErr_Occurred()) {
@@ -139,25 +140,25 @@ static PyObject *getAiCoreNum(PyObject *self, PyObject *args) {
 }
 
 static PyObject *createStream(PyObject *self, PyObject *args) {
-  rtStream_t stream;
+	aclrtStream stream;
 
-  rtError_t rtRet = rtStreamCreate(&stream, 0);
+	aclError aclRet = aclrtCreateStream(&stream);
 
-  if (rtRet != RT_ERROR_NONE) {
-    printf("rtStreamCreate failed, 0x%x", rtRet);
-    return nullptr;
-  }
-  if (PyErr_Occurred()) {
-    return nullptr;
-  }
-  uint64_t stream_uint64 = reinterpret_cast<uint64_t>(stream);
-  PyObject *result = Py_BuildValue("K", stream_uint64);
+	if (aclRet != ACL_SUCCESS) {
+		printf("aclrtCreateStream failed, 0x%x", aclRet);
+		return nullptr;
+	}
+	if (PyErr_Occurred()) {
+		return nullptr;
+	}
+	uint64_t stream_uint64 = reinterpret_cast<uint64_t>(stream);
+    PyObject* result = Py_BuildValue("K", stream_uint64);
 
-  if (result == nullptr) {
-    rtStreamDestroy(stream);
-  }
+    if (result == nullptr) {
+        aclrtDestroyStream(stream);
+    }
 
-  return result;
+    return result;
 }
 
 /**
@@ -251,21 +252,20 @@ static PyObject *allocateHostMemory(PyObject *self, PyObject *args) {
     return nullptr;
   }
 
-  void *host_ptr = nullptr;
-  rtError_t error = rtMallocHost(&host_ptr, num_bytes, RT_MEMORY_HOST);
-  if (error != RT_ERROR_NONE) {
-    PyErr_Format(PyExc_RuntimeError,
-                 "rtMallocHost failed with error code: 0x%x", error);
-    return nullptr;
-  }
+	void* host_ptr = nullptr;
+	aclError error = aclrtMallocHost(&host_ptr, num_bytes);
+	if (error != ACL_SUCCESS) {
+		PyErr_Format(PyExc_RuntimeError, "aclrtMallocHost failed with error code: 0x%x", error);
+		return nullptr;
+	}
 
-  PyObject *result = Py_BuildValue("K", (uint64_t)host_ptr);
+    PyObject* result = Py_BuildValue("K", (uint64_t)host_ptr);
 
-  if (result == nullptr) {
-    rtFreeHost(host_ptr);
-  }
+    if (result == nullptr) {
+        aclrtFreeHost(host_ptr);
+    }
 
-  return result;
+    return result;
 }
 
 static PyObject *allocateDeviceMemory(PyObject *self, PyObject *args) {
@@ -274,57 +274,54 @@ static PyObject *allocateDeviceMemory(PyObject *self, PyObject *args) {
     return nullptr;
   }
 
-  void *device_ptr = nullptr;
-  rtError_t error = rtMalloc(&device_ptr, num_bytes, RT_MEMORY_HBM, 0);
-  if (error != RT_ERROR_NONE) {
-    PyErr_Format(PyExc_RuntimeError, "rtMalloc failed with error code: 0x%x",
-                 error);
-    return nullptr;
-  }
+	void* device_ptr = nullptr;
+	aclrtMemMallocPolicy policy = (aclrtMemMallocPolicy)(ACL_MEM_MALLOC_HUGE_FIRST | ACL_MEM_TYPE_HIGH_BAND_WIDTH);
+	aclError error = aclrtMalloc(&device_ptr, num_bytes, policy);
+	if (error != ACL_SUCCESS) {
+		PyErr_Format(PyExc_RuntimeError, "aclrtMalloc failed with error code: 0x%x", error);
+		return nullptr;
+	}
 
-  PyObject *result = Py_BuildValue("K", (uint64_t)device_ptr);
+    PyObject* result = Py_BuildValue("K", (uint64_t)device_ptr);
 
-  if (result == nullptr) {
-    rtFree(device_ptr);
-  }
+    if (result == nullptr) {
+        aclrtFree(device_ptr);
+    }
 
-  return result;
+    return result;
 }
 
-static PyObject *copyMemory(PyObject *self, PyObject *args) {
-  uint64_t dst_ptr;
-  uint64_t src_ptr;
-  size_t count;
-  const char *direction_str;
-  rtMemcpyKind_t copy_direction;
+static PyObject* copyMemory(PyObject* self, PyObject* args) {
+	uint64_t dst_ptr;
+	uint64_t src_ptr;
+	size_t count;
+	const char* direction_str;
+	aclrtMemcpyKind copy_direction;
 
-  if (!PyArg_ParseTuple(args, "KKns", &dst_ptr, &src_ptr, &count,
-                        &direction_str)) {
-    return nullptr;
-  }
+	if (!PyArg_ParseTuple(args, "KKns", &dst_ptr, &src_ptr, &count, &direction_str)) {
+		return nullptr;
+	}
 
-  if (strcmp(direction_str, "H2D") == 0) {
-    copy_direction = RT_MEMCPY_HOST_TO_DEVICE;
-  } else if (strcmp(direction_str, "D2H") == 0) {
-    copy_direction = RT_MEMCPY_DEVICE_TO_HOST;
-  } else {
-    PyErr_SetString(PyExc_ValueError,
-                    "Invalid copy direction. Must be 'H2D' or 'D2H'.");
-    return nullptr;
-  }
+	if (strcmp(direction_str, "H2D") == 0) {
+		copy_direction = ACL_MEMCPY_HOST_TO_DEVICE;
+	} else if (strcmp(direction_str, "D2H") == 0) {
+		copy_direction = ACL_MEMCPY_DEVICE_TO_HOST;
+	} else {
+		PyErr_SetString(PyExc_ValueError, "Invalid copy direction. Must be 'H2D' or 'D2H'.");
+		return nullptr;
+	}
 
-  void *dst = (void *)dst_ptr;
-  void *src = (void *)src_ptr;
+	void *dst = (void*)dst_ptr;
+	void *src = (void*)src_ptr;
 
-  rtError_t error = rtMemcpy(dst, count, src, count, copy_direction);
-  if (error != RT_ERROR_NONE) {
-    PyErr_Format(PyExc_RuntimeError, "rtMemcpy failed with error code: 0x%x",
-                 error);
-    return nullptr;
-  }
+	aclError error = aclrtMemcpy(dst, count, src, count, copy_direction);
+	if (error != ACL_SUCCESS) {
+		PyErr_Format(PyExc_RuntimeError, "aclrtMemcpy failed with error code: 0x%x", error);
+		return nullptr;
+	}
 
-  Py_INCREF(Py_None);
-  return Py_None;
+	Py_INCREF(Py_None);
+	return Py_None;
 }
 
 static PyMethodDef NpuUtilsMethods[] = {

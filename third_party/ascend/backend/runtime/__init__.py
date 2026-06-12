@@ -32,4 +32,15 @@ def _patch_autotune():
     triton.autotune = autotune
 
 
+def _patch_jit():
+    try:
+        import triton
+    except ImportError:
+        return
+
+    from .jit import ascend_jit
+
+    triton.jit = ascend_jit
+    
+_patch_jit()
 _patch_autotune()
