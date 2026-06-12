@@ -28,8 +28,6 @@ import sysconfig
 from typing import Optional
 import functools
 import hashlib
-import torch
-import torch_npu
 from triton.runtime.cache import get_cache_manager, get_dump_manager, default_cache_dir
 from triton.backends.driver import DriverBase
 from triton.backends.compiler import GPUTarget
@@ -188,18 +186,24 @@ class NPUDriver(DriverBase):
         """
         Get current device
         """
+        import torch
+        import torch_npu
         return torch.npu.current_device()
 
     def set_current_device(self, device):
         """
         Set current device as the given device
         """
+        import torch
+        import torch_npu
         return torch.npu.set_device(device)
 
     def get_current_stream(self, device: Optional[int] = None) -> int:
         """
         Get stream for current device
         """
+        import torch
+        import torch_npu
         if device is None:
             device = torch.npu.current_device()
         if hasattr(torch_npu._C, "_npu_getCurrentRawStreamNoWait"):
@@ -758,7 +762,7 @@ extern "C" {
     attrInfo.value = value;
     
     aclrtLaunchKernelCfg cfgCfgInfo = {{}};
-    cfgCfgInfo.attrs = attrInfo;
+    cfgCfgInfo.attrs = &attrInfo;
     cfgCfgInfo.numAttrs = 1;
     
     ret = aclrtLaunchKernelWithHostArgs(func, blockNum, stream, &cfgCfgInfo, launch_args.data(), launch_args.size(), nullptr, 0);
