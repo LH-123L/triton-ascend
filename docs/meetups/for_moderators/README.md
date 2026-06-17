@@ -41,7 +41,7 @@ Ask Whitney, Cicie or Bill for access to the shared Google calendar ["Triton Com
 
 ## How to run a community meetup
 
-1. Work with one of the folks above to create a Microsoft Teams webinar   (occurring 6-8 weeks in the future).  
+1. Work with one of the folks above to create a Microsoft Teams webinar (occurring 6-8 weeks in the future).
 Template:
 
     <pre>
