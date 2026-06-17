@@ -82,7 +82,7 @@ It plays a pivotal bridging role: providing upward integration with multiple AI 
 
 You can visit the Ascend community website, and install and configure CANN according to the provided [software installation guide](https://www.hiascend.com/cann/download). Developers can select the CANN version, product series, CPU architecture, operating system, and installation method to find the corresponding installation commands.
 
-During the installation, select one of the following CANN versions in *{version}*. It is advisable to download and install version 8.5.0.
+During the installation, select one of the following CANN versions in *{version}*. It is advisable to download and install version 9.0.0.
 
 - Note: If the installation path is not specified, software will be installed in the default path. The default installation paths are as follows: For the **root** user, the path is `/usr/local/Ascend`. For non-root users, the path is `${HOME}/Ascend`, where `${HOME}` indicates the current user's directory.
 The preceding environment variable configurations take effect only in the current window. You can add the `source ${HOME}/Ascend/ascend-toolkit/set_env.sh` command to the environment variable configuration file (such as the .bashrc file) as required.
@@ -318,13 +318,13 @@ You need to specify the `CANN_BASE_IMAGE` build arg to select the appropriate CA
 | CANN Version | Chip Type | Python | Image Tag |
 |---|---|---|---|
 | 8.5.0 | `A2` | 3.10 | `8.5.0-910b-ubuntu22.04-py3.10` |
-| 8.5.0 | `A3` | 3.10 | `8.5.0-a3-ubuntu22.04-py3.10` |
 | 8.5.0 | `A2` | 3.11 | `8.5.0-910b-ubuntu22.04-py3.11` |
+| 8.5.0 | `A3` | 3.10 | `8.5.0-a3-ubuntu22.04-py3.10` |
 | 8.5.0 | `A3` | 3.11 | `8.5.0-a3-ubuntu22.04-py3.11` |
-| 9.0.0-beta.2 | `A2` | 3.10 | `9.0.0-beta.2-910b-ubuntu22.04-py3.10` |
-| 9.0.0-beta.2 | `A3` | 3.10 | `9.0.0-beta.2-a3-ubuntu22.04-py3.10` |
-| 9.0.0-beta.2 | `A2` | 3.11 | `9.0.0-beta.2-910b-ubuntu22.04-py3.11` |
-| 9.0.0-beta.2 | `A3` | 3.11 | `9.0.0-beta.2-a3-ubuntu22.04-py3.11` |
+| 9.0.0 | `A2` | 3.11 | `9.0.0-910b-ubuntu22.04-py3.11` |
+| 9.0.0 | `A2` | 3.12 | `9.0.0-910b-ubuntu22.04-py3.12` |
+| 9.0.0 | `A3` | 3.11 | `9.0.0-a3-ubuntu22.04-py3.11`   |
+| 9.0.0 | `A3` | 3.12 | `9.0.0-a3-ubuntu22.04-py3.12`   |
 
 You can check the NPU model on your system using the `npu-smi` command.
 

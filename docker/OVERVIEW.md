@@ -87,7 +87,7 @@ docker build \
 -t triton:3.2.1-a3-ubuntun22.04-py3.11-aarch64 \
 -f Dockerfile .
 ```
-**x86_64**
+**amd64**
 ```
 docker build \
 --network host \
@@ -107,9 +107,9 @@ RUN apt update -y && \
 # Supported hardware
 | Chip Series | Product Example                 | Architecture  |
 |-------------|---------------------------------|---------------|
-| Ascend 910b | Atlas 800T A2, Atlas 900 A2 PoD | ARM64, x86_64 |
-| Ascend A3   | Atlas 800T A3                   | ARM64, x86_64 |
-| Ascend 950  | 950PR Series                    | ARM64, x86_64 |
+| Ascend 910b | Atlas 800T A2, Atlas 900 A2 PoD | arm64, amd64 |
+| Ascend A3   | Atlas 800T A3                   | arm64, amd64 |
+| Ascend 950  | 950PR Series                    | arm64, amd64 |
 
 # License
 View the license information of the CANN, Torch-npu and Triton-Ascend software contained in the image. For details, visit [License](https://www.hiascend.com/en/software/protocol).<br/>

@@ -83,7 +83,7 @@ docker exec -it triton-ascend_container bash
 
 您可以访问昇腾社区官网，根据其提供的[社区软件安装指引](https://www.hiascend.com/cann/download)完成 CANN 的安装与配置。开发者选择CANN版本、产品系列、CPU架构、操作系统和安装方式便可找到对应的安装命令。
 
-在安装过程中，CANN 版本“**{version}**”请选择如下版本之一。建议下载安装 8.5.0 版本:
+在安装过程中，CANN 版本“**{version}**”请选择如下版本之一。建议下载安装 9.0.0 版本:
 
 - 注：如果用户未指定安装路径，则软件会安装到默认路径下，默认安装路径如下。root用户：`/usr/local/Ascend`，非root用户：`${HOME}/Ascend`，`${HOME}`为当前用户目录。
 上述环境变量配置只在当前窗口生效，用户可以按需将```source ${HOME}/Ascend/ascend-toolkit/set_env.sh```命令写入环境变量配置文件（如.bashrc文件）。
@@ -311,16 +311,16 @@ triton-ascend/CMakeLists.txt
 
 您需要通过`--build-arg`指定`CANN_BASE_IMAGE`参数来选择适合您机器的CANN基础镜像。可用的CANN基础镜像标签可在[quay.io/ascend/cann](https://quay.io/repository/ascend/cann?tab=tags)查看。
 
-| CANN版本 | 芯片类型 | Python版本 | 镜像标签 |
-|---|---|---|---|
-| 8.5.0 | `A2` | 3.10 | `8.5.0-910b-ubuntu22.04-py3.10` |
-| 8.5.0 | `A3` | 3.10 | `8.5.0-a3-ubuntu22.04-py3.10` |
-| 8.5.0 | `A2` | 3.11 | `8.5.0-910b-ubuntu22.04-py3.11` |
-| 8.5.0 | `A3` | 3.11 | `8.5.0-a3-ubuntu22.04-py3.11` |
-| 9.0.0-beta.2 | `A2` | 3.10 | `9.0.0-beta.2-910b-ubuntu22.04-py3.10` |
-| 9.0.0-beta.2 | `A3` | 3.10 | `9.0.0-beta.2-a3-ubuntu22.04-py3.10` |
-| 9.0.0-beta.2 | `A2` | 3.11 | `9.0.0-beta.2-910b-ubuntu22.04-py3.11` |
-| 9.0.0-beta.2 | `A3` | 3.11 | `9.0.0-beta.2-a3-ubuntu22.04-py3.11` |
+| CANN版本 | 芯片类型 | Python版本 | 镜像标签                            |
+|---|------|----------|---------------------------------|
+| 8.5.0 | `A2` | 3.10     | `8.5.0-910b-ubuntu22.04-py3.10` |
+| 8.5.0 | `A3` | 3.10     | `8.5.0-a3-ubuntu22.04-py3.10`   |
+| 8.5.0 | `A2` | 3.11     | `8.5.0-910b-ubuntu22.04-py3.11` |
+| 8.5.0 | `A3` | 3.11     | `8.5.0-a3-ubuntu22.04-py3.11`   |
+| 9.0.0 | `A2` | 3.11     | `9.0.0-910b-ubuntu22.04-py3.11` |
+| 9.0.0 | `A2` | 3.12     | `9.0.0-910b-ubuntu22.04-py3.12` |
+| 9.0.0 | `A3` | 3.11     | `9.0.0-a3-ubuntu22.04-py3.11`   |
+| 9.0.0 | `A3` | 3.12     | `9.0.0-a3-ubuntu22.04-py3.12`   |
 
 您可以通过 npu-smi 命令查看系统上的NPU型号。
 
@@ -334,7 +334,7 @@ triton-ascend/CMakeLists.txt
 ```bash
 git clone https://github.com/triton-lang/triton-ascend.git && cd triton-ascend
 docker build \
---build-arg CANN_BASE_IMAGE=quay.io/ascend/cann:8.5.0-a3-ubuntu22.04-py3.10 \
+--build-arg CANN_BASE_IMAGE=quay.io/ascend/cann:9.0.0-a3-ubuntu22.04-py3.11 \
 -t triton-ascend-image:latest -f ./docker/Dockerfile .
 ```
 
