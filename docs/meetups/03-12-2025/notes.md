@@ -25,7 +25,7 @@ Notes:
   * Warp specialized: 12 warps, 4 warps for producing data-only do load, 8 for wgmma-only do wmma.  Frees up more capacity for more complex kernels like flash attention.
 * Compiler implementation
   * How to enable warp specialization
-    * Automaticlly enabled by adding two switches to autotune config.
+    * Automatically enabled by adding two switches to autotune config.
       * Num_consumer_groups - non-load warp groups
       * Num_buffer_warp_spec - # of buffers between producer and consumer
   * Concept
@@ -48,7 +48,7 @@ Notes:
     * Complex control flows, partition schemes (ping-pong, support for Blackwell)
 * Case Study: Flash Attention - Kevin and Manman
   * Without WS
-    * Compute Througput: 45%
+    * Compute Throughput: 45%
     * Memory Throughput: 35%
     * SM Busy: 46%
     * No interleaving: CUDA core idle when tensor cores running
