@@ -78,7 +78,7 @@ pip install triton-ascend==3.2.1 --extra-index-url=https://triton-ascend.osinfra
 
 ## 基于pip安装
 
-- ### 最新稳定版本
+### 最新稳定版本
 
 - 您可以通过pip安装Triton-Ascend的最新稳定版本。
 
@@ -97,7 +97,7 @@ pip uninstall triton-ascend
 pip install triton-ascend==3.2.1 --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 ```
 
-- ### 历史稳定版本
+### 历史稳定版本
 
 ```shell
 pip install triton-ascend==3.2.0
@@ -105,7 +105,7 @@ pip install triton-ascend==3.2.0
 
 ## 基于源码安装
 
-- ### 快速安装
+### 快速安装
 
 ```bash
 git clone https://github.com/triton-lang/triton-ascend.git
