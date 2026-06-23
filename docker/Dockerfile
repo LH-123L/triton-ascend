@@ -72,11 +72,6 @@ RUN \
       -DCMAKE_INSTALL_PREFIX=${LLVM_INSTALL_PREFIX} && \
     ninja install
 
-
-RUN \
-    echo "export LLVM_INSTALL_PREFIX=/usr/local/llvm-install" >> /etc/profile && \
-    echo "export LLVM_INSTALL_PREFIX=/usr/local/llvm-install" >> ~/.bashrc
-
 COPY requirements.txt requirements_dev.txt ./
 
 RUN \
@@ -88,12 +83,17 @@ RUN \
    cd /home/triton && \
    git clone https://gitcode.com/Ascend/triton-ascend.git && \
    cd triton-ascend && \
+   export LLVM_INSTALL_PREFIX=/usr/local/llvm-install && \
    LLVM_SYSPATH=${LLVM_INSTALL_PREFIX} \
    TRITON_BUILD_WITH_CCACHE=true \
    TRITON_BUILD_WITH_CLANG_LLD=true \
    TRITON_BUILD_PROTON=OFF \
    TRITON_WHEEL_NAME="triton-ascend" \
    TRITON_APPEND_CMAKE_ARGS="-DTRITON_BUILD_UT=OFF" \
-   python3 setup.py install
+   python3 setup.py install 
+
+RUN \
+    echo "export LLVM_INSTALL_PREFIX=/usr/local/llvm-install" >> /etc/profile && \
+    echo "export LLVM_INSTALL_PREFIX=/usr/local/llvm-install" >> ~/.bashrc
 
 WORKDIR /home/triton
