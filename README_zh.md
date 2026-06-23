@@ -80,7 +80,7 @@ pip install triton-ascend==3.2.1 --extra-index-url=https://triton-ascend.osinfra
 
 ### 最新稳定版本
 
-- 您可以通过pip安装Triton-Ascend的最新稳定版本。
+您可以通过pip安装Triton-Ascend的最新稳定版本。
 
 ```shell
 pip install triton-ascend==3.2.1 --extra-index-url=https://triton-ascend.osinfra.cn/pypi/simple
