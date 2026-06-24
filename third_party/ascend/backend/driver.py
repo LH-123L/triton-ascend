@@ -186,21 +186,32 @@ class NPUDriver(DriverBase):
         """
         Get current device
         """
-        return get_backend_func("get_current_device")
+        import torch
+        import torch_npu
+        return torch.npu.current_device()
 
     def set_current_device(self, device):
         """
         Set current device as the given device
         """
-        return get_backend_func("set_current_device", device)
+        import torch
+        import torch_npu
+        return torch.npu.set_device(device)
 
     def get_current_stream(self, device: Optional[int] = None) -> int:
         """
         Get stream for current device
         """
-        # According to torch_npu, the content of a torch.npu.Stream is essentilly an rtStream_t
-        # TODO: use CANN API instead of torchnpu
-        return get_backend_func("get_current_stream", device)
+        import torch
+        import torch_npu
+        if device is None:
+            device = torch.npu.current_device()
+        if hasattr(torch_npu._C, "_npu_getCurrentRawStreamNoWait"):
+            from torch_npu._C import _npu_getCurrentRawStreamNoWait
+            return _npu_getCurrentRawStreamNoWait(device)
+        else:
+            from torch_npu._C import _npu_getCurrentRawStream
+            return _npu_getCurrentRawStream(device)
 
     def get_benchmarker(self):
         from triton.testing import do_bench
@@ -580,27 +591,6 @@ static inline DevicePtrInfo getPointer(PyObject *obj, int idx) {
     ptr_info.dev_ptr = reinterpret_cast<void *>(PyLong_AsUnsignedLongLong(ret));
     if(!ptr_info.dev_ptr)
       return ptr_info;
-        aclrtPtrAttributes attributes;
-        aclError status = aclrtPointerGetAttributes(ptr_info.dev_ptr, &attributes);
-
-        if (status == ACL_SUCCESS) {
-          if (attributes.location.type != ACL_MEM_LOCATION_TYPE_DEVICE && attributes.location.type != 4) {
-            Py_DECREF(ret);
-            PyErr_Format(PyExc_ValueError,
-                         "Pointer argument (at %d) cannot be accessed from Triton (cpu tensor?)", idx);
-            ptr_info.valid = false;
-            return ptr_info;
-          }
-        } else {
-          Py_DECREF(ret);
-          PyErr_Format(PyExc_RuntimeError,
-                       "Failed to query pointer attributes at argument %d. "
-                       "Error code: %d. This may indicate invalid memory address "
-                       "or NPU device error.",
-                       idx, status);
-          ptr_info.valid = false;
-          return ptr_info;
-        }
     Py_DECREF(ret);
     return ptr_info;
   }
@@ -618,6 +608,8 @@ extern "C" {
   extern int MsprofRegisterCallback(unsigned int moduleId, callback handle);
   static unsigned int __MsprofFlagL0  = 0;
   static unsigned int __MsprofFlagL1  = 0;
+  static const char* kernelName = nullptr ;
+  static std::vector<int> tensorKinds;
 
   int ProfCtrlHandle(unsigned int CtrlType, void* CtrlData, unsigned int DataLen) {
     if ((CtrlData == nullptr) || (DataLen == 0U)) {
@@ -839,8 +831,7 @@ void triton_launch_kernel(
   // only 1D parallelization is supported for NPU
   // Pointer type becomes flattend 1-D Memref tuple: base_ptr, data_ptr, offset, shape, stride
   // base_ptr offset shape and stride are not used, arbitrarily set for now
-  std::string name = "";
-  name.append(kernelName);
+  static std::string name(kernelName);
   void *workspace_addr_ptr = NULL;
   {coalesce_grid_div}
   uint32_t blockNum4Workspace = gridX * gridY * gridZ;
@@ -947,8 +938,7 @@ void triton_launch_kernel(
 
 static void _launch(const char* kernelName, const void* func, rtStream_t stream, int gridX, int gridY, int gridZ, std::vector<std::vector<int64_t>> &tensorShapes, std::vector<int> &tensorKinds{', ' + arg_decls if len(signature) > 0 else ''}) {{
   // Keep Python launcher on the stable local packing path.
-  std::string name = "";
-  name.append(kernelName);
+  static std::string name(kernelName);
   void *workspace_addr_ptr = NULL;
   {coalesce_grid_div}
   uint32_t blockNum4Workspace = gridX * gridY * gridZ;
@@ -1098,17 +1088,20 @@ static PyObject* launch(PyObject* self, PyObject* args) {{
 
 
   // get kernel_name
-  PyObject *kernelNameObj = PyDict_GetItemString(packedMetadata, "kernel_name");
-  const char *kernelName = PyUnicode_AsUTF8(kernelNameObj);
+  if (!kernelName) {{
+      PyObject *kernelNameObj = PyDict_GetItemString(packedMetadata, "kernel_name");
+      kernelName = PyUnicode_AsUTF8(kernelNameObj);
+  }}
   // get tensor_kinds
-  std::vector<int> tensorKinds;
-  PyObject *tensorKindList = PyDict_GetItemString(packedMetadata, "tensor_kinds");
-  if (tensorKindList) {{
-    int size = PyObject_Size(tensorKindList);
-    for (int i = 0; i < size; i++) {{
-      PyObject *kind = PySequence_GetItem(tensorKindList, i);
-      tensorKinds.push_back(PyLong_AsLong(kind));
-    }}
+  if( tensorKinds.empty() ) {{
+     PyObject *tensorKindList = PyDict_GetItemString(packedMetadata, "tensor_kinds");
+     if (tensorKindList) {{
+       int size = PyObject_Size(tensorKindList);
+       for (int i = 0; i < size; i++) {{
+         PyObject *kind = PySequence_GetItem(tensorKindList, i);
+         tensorKinds.push_back(PyLong_AsLong(kind));
+       }}
+     }}
   }}
 
 
