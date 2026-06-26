@@ -284,9 +284,13 @@ def compile(src, target=None, options=None, _env_vars=None):
         filter_traceback(e)
         raise
     use_ir_loc = os.environ.get("USE_IR_LOC", None)
+    import time
     for ext, compile_ir in list(stages.items())[first_stage:]:
         try:
+            start  = time.perf_counter()
             next_module = compile_ir(module, metadata)
+            end = time.perf_counter()
+            print(f"Compile {ext} took {end - start}:.6f s,exr={ext}")
         except Exception as e:
             if (ext == "ttadapter"):
                 stage_name = "ConvertTritonIRToLinalgIR"
