@@ -45,7 +45,7 @@ from triton.backends.ascend.utils import (
 # TRITON_PROFILER_REGISTERED without a per-launch `import triton` + attribute walk.
 import triton.backends.ascend.utils as _ascend_utils
 
-from triton.backends.ascend.backend import timing as _compile_timing
+from triton.backends.ascend import timing as _compile_timing
 
 class NPUUtils(object):
     def __new__(cls):
@@ -144,18 +144,18 @@ class NPULauncher(object):
             kernel_hash = getattr(metadata, 'hash', 'unknown')
             phases = {}
 
-            make_ttir_ms = getattr(metadata, '_timing_make_ttir_ms', None)
+            make_ttir_ms = getattr(metadata, 'timing_make_ttir_ms', None)
             if make_ttir_ms is not None:
                 phases["make_ttir"] = {"elapsed_ms": round(make_ttir_ms, 4)}
 
-            ttir_to_linalg_ms = getattr(metadata, '_timing_ttir_to_linalg_ms', None)
+            ttir_to_linalg_ms = getattr(metadata, 'timing_ttir_to_linalg_ms', None)
             if ttir_to_linalg_ms is not None:
                 phases["ttir_to_linalg"] = {
                     "total_elapsed_ms": round(ttir_to_linalg_ms, 4),
-                    "passes": getattr(metadata, '_timing_ttir_to_linalg_passes', []),
+                    "passes": getattr(metadata, 'timing_ttir_to_linalg_passes', []),
                 }
 
-            linalg_to_bin_ms = getattr(metadata, '_timing_linalg_to_bin_ms', None)
+            linalg_to_bin_ms = getattr(metadata, 'timing_linalg_to_bin_ms', None)
             if linalg_to_bin_ms is not None:
                 phases["linalg_to_bin"] = {
                     "elapsed_ms": round(linalg_to_bin_ms, 4),
@@ -167,7 +167,7 @@ class NPULauncher(object):
                 "cold_start": False,
             }
 
-            ir_stats = getattr(metadata, '_timing_ir_stats', {})
+            ir_stats = getattr(metadata, 'timing_ir_stats', {})
             _compile_timing.record_kernel_timing(
                 kernel_name, kernel_hash, phases, ir_stats
             )

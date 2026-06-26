@@ -54,7 +54,7 @@ from triton.backends.ascend.utils import (
     get_cann_version_file_hash,
 )
 
-from triton.backends.ascend.backend import timing as _compile_timing
+from triton.backends.ascend import timing as _compile_timing
 from triton.backends.ascend.driver import (
     NPUUtils
 )
@@ -140,7 +140,7 @@ def make_ttir(mod, metadata, opt):
             print(f"Dumping intermediate results to {dump_manager.cache_dir}")
             dump_manager.put(str(mod), "kernel.ttir.mlir", binary=False)
 
-    metadata["_timing_make_ttir_ms"] = _timer.elapsed_ms
+    metadata["timing_make_ttir_ms"] = _timer.elapsed_ms
     return mod
 
 
@@ -260,9 +260,9 @@ def ttir_to_linalg(mod, metadata, opt, *, named_ops=False):
 
         ir_stats_after = _compile_timing.count_ir_ops(mod)
 
-        metadata["_timing_ttir_to_linalg_ms"] = _total_timer.elapsed_ms
-        metadata["_timing_ttir_to_linalg_passes"] = _passes
-        metadata["_timing_ir_stats"] = {
+        metadata["timing_ttir_to_linalg_ms"] = _total_timer.elapsed_ms
+        metadata["timing_ttir_to_linalg_passes"] = _passes
+        metadata["timing_ir_stats"] = {
             "num_ops_before": ir_stats_before,
             "num_ops_after": ir_stats_after,
         }
@@ -669,7 +669,7 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
                 if opt.debug:
                     _save_npuir_debug_output(e.stdout, e.stderr, tmpdir, metadata["hash"])
                 raise
-        metadata["_timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
+        metadata["timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
 
         if opt.debug:
             _save_npuir_debug_output(ret.stdout, ret.stderr, tmpdir, metadata["hash"])
@@ -894,7 +894,7 @@ def linalg_to_bin_enable_npu_compile_A2_A3(linalg: str, metadata, opt):
                 if opt.debug:
                     _save_npuir_debug_output(e.stdout, e.stderr, tmpdir, metadata["hash"])
                 raise
-        metadata["_timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
+        metadata["timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
 
         if opt.debug:
             _save_npuir_debug_output(ret.stdout, ret.stderr, tmpdir, metadata["hash"])
@@ -1114,7 +1114,7 @@ def ttir_to_npubin(mod, metadata, opt):
         _bin_timer = _compile_timing.time_phase("linalg_to_bin")
         with _bin_timer:
             ret = subprocess.run(cmd_list, env=env, capture_output=True, check=True)
-        metadata["_timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
+        metadata["timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
         if not Path(bin_path).exists():
             error_msg = ret.stderr.decode('utf-8')
             print(f"[DEBUG] {bin_path} is not found")
