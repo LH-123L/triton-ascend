@@ -284,7 +284,9 @@ def header_file(enable_taskqueue):
 
 @backend_strategy_registry.register("torch_npu", "header_file")
 def header_file(enable_taskqueue):
-    return '#include <dlfcn.h>\n#include <functional>'
+    return f'''#include <ATen/ATen.h>
+#include <torch_npu/csrc/core/npu/NPUWorkspaceAllocator.h>
+{'#include <torch_npu/csrc/framework/OpCommand.h>' if {enable_taskqueue} else ''}'''
 
 
 @backend_strategy_registry.register("mindspore", "allocate_memory")
@@ -295,30 +297,18 @@ def allocate_memory(size, stream):
 
 @backend_strategy_registry.register("torch_npu", "allocate_memory")
 def allocate_memory(size, stream):
-    return f'''init_npu_utils();
-    if (!g_allocate_workspace_legacy) {{
-      fprintf(stderr, "Error: triton_allocate_workspace_legacy is unavailable\\n");
-      workspace_addr_ptr = nullptr;
-    }} else {{
-      workspace_addr_ptr = g_allocate_workspace_legacy({size});
-    }}'''
+    return f"workspace_addr_ptr = const_cast<void *>(at::empty({size}, at::TensorOptions().device(at::kPrivateUse1).dtype(at::kByte)).storage().data());"
 
 
 @backend_strategy_registry.register("mindspore", "allocate_sync_block_lock")
 def allocate_sync_block_lock(size, stream):
     return f'''auto sync_ptr = std::make_shared<mindspore::kernel::pyboost::MemBlock>(device_context, {size}, reinterpret_cast<uint64_t>({stream}));
-    syncBlockLock_ptr = sync_ptr->ptr_;'''
+    syncBlockLock_ptr = work_ptr->ptr_;'''
 
 
 @backend_strategy_registry.register("torch_npu", "allocate_sync_block_lock")
 def allocate_sync_block_lock(size, stream):
-    return f'''init_npu_utils();
-    if (!g_allocate_sync_block_lock) {{
-      fprintf(stderr, "Error: triton_allocate_sync_block_lock is unavailable\\n");
-      syncBlockLock_ptr = nullptr;
-    }} else {{
-      syncBlockLock_ptr = g_allocate_sync_block_lock({size}, {stream}, &syncBlockLock_handle);
-    }}'''
+    return f"syncBlockLock_ptr = const_cast<void *>(at_npu::native::allocate_workspace({size}, {stream}).storage().data());"
 
 
 @backend_strategy_registry.register("mindspore", "pre_launch")
@@ -342,9 +332,5 @@ def async_launch(func):
 
 @backend_strategy_registry.register("torch_npu", "async_launch")
 def async_launch(func):
-    return f'''init_npu_utils();
-   if (!g_async_launch) {{
-     fprintf(stderr, "Error: triton_async_launch is unavailable\\n");
-     return;
-   }}
-   g_async_launch(static_cast<void*>(&{func}), name.c_str());'''
+    return f'''at_npu::native::OpCommand cmd;
+    cmd.Name(name.c_str()).SetCustomHandler({func}).Run();'''
