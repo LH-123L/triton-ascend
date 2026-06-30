@@ -179,7 +179,7 @@ def get_tensor_params_shape(*args):
 
 
 @backend_strategy_registry.register("mindspore", "get_cc_cmd")
-def get_cc_cmd():
+def get_cc_cmd(build_pch):
     import mindspore
     mindspore_path = os.path.dirname(os.path.realpath(mindspore.__file__))
     cc_cmd = [
@@ -196,22 +196,17 @@ def get_cc_cmd():
         f"-I{os.path.join(mindspore_path, 'include/mindspore/ops/include')}",
         f"-D_GLIBCXX_USE_CXX11_ABI={get_mindspore_cxx_abi()}",
         "-DENABLE_FAST_HASH_TABLE=1",
-        f"-L{os.path.join(mindspore_path, 'lib')}",
-        f"-lmindspore_pynative_utils",
     ]
+    if not build_pch:
+        cc_cmd += [
+                f"-L{os.path.join(mindspore_path, 'lib')}",
+                f"-lmindspore_pynative_utils",
+            ]
     return cc_cmd
 
 
 @backend_strategy_registry.register("torch_npu", "get_cc_cmd")
-def get_cc_cmd():
-    return [
-        f"-D_GLIBCXX_USE_CXX11_ABI={get_torch_cxx_abi()}",
-        "-ldl",
-    ]
-
-
-@backend_strategy_registry.register("torch_npu", "get_cc_cmd_npu_utils")
-def get_cc_cmd_npu_utils():
+def get_cc_cmd(build_pch):
     import torch
     import torch_npu
     torch_path = os.path.dirname(os.path.realpath(torch.__file__))
@@ -220,10 +215,12 @@ def get_cc_cmd_npu_utils():
         f"-I{os.path.join(torch_path, 'include')}",
         f"-I{os.path.join(torch_npu_path, 'include')}",
         f"-D_GLIBCXX_USE_CXX11_ABI={get_torch_cxx_abi()}",
-        f"-L{os.path.join(torch_npu_path, 'lib')}",
-        f"-ltorch_npu",
-        "-DUSE_TORCH_NPU",
     ]
+    if not build_pch:
+        cc_cmd += [
+            f"-L{os.path.join(torch_npu_path, 'lib')}",
+            f"-ltorch_npu",
+        ]
     return cc_cmd
 
 
