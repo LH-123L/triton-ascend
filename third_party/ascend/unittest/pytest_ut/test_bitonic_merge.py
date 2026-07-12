@@ -49,14 +49,43 @@ def bitonic_merge_2d_kernel(in_ptr, out_ptr, M: tl.constexpr,
     tl.store(out_ptr + tl.arange(0, M)[:, None] * N + tl.arange(0, N)[None, :], y)
 
 
+def _make_bitonic_1d(N, dtype, device='npu', low=0, high=1000):
+    """
+    Build a 1D bitonic sequence of length N by concatenating an ascending
+    half and a descending half. A bitonic sequence is the legal input for
+    bitonic_merge and the output is guaranteed to be fully sorted.
+    """
+    half = N // 2
+    if dtype.is_floating_point:
+        a = torch.sort(torch.randn(half, dtype=dtype, device=device)).values
+        b = torch.sort(torch.randn(half, dtype=dtype, device=device),
+                       descending=True).values
+    else:
+        a = torch.sort(torch.randint(low, high, (half,),
+                                     dtype=dtype, device=device)).values
+        b = torch.sort(torch.randint(low, high, (half,),
+                                     dtype=dtype, device=device),
+                       descending=True).values
+    return torch.cat([a, b])
+
+
+def _make_bitonic_2d(M, N, dtype, device='npu', low=0, high=1000):
+    """
+    Build a 2D tensor of shape (M, N) where each row is a bitonic sequence
+    along the last dimension.
+    """
+    rows = [_make_bitonic_1d(N, dtype, device, low, high) for _ in range(M)]
+    return torch.stack(rows, dim=0)
+
+
 # ============================================================
 # Test cases: ascending merge
 # ============================================================
 @pytest.mark.parametrize("N", [2, 4, 8, 16, 32, 64])
 def test_bitonic_merge_ascending_fp32(N):
-    """Bitonic merge on float32 tensor, ascending order."""
+    """Bitonic merge on float32 bitonic input, ascending order."""
     torch.manual_seed(0)
-    x = torch.randn(N, dtype=torch.float32, device='npu')
+    x = _make_bitonic_1d(N, torch.float32)
     out = torch.empty(N, dtype=torch.float32, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=0)
     expected, _ = torch.sort(x)
@@ -65,9 +94,9 @@ def test_bitonic_merge_ascending_fp32(N):
 
 @pytest.mark.parametrize("N", [4, 8, 16, 32])
 def test_bitonic_merge_ascending_fp16(N):
-    """Bitonic merge on float16 tensor, ascending order."""
+    """Bitonic merge on float16 bitonic input, ascending order."""
     torch.manual_seed(0)
-    x = torch.randn(N, dtype=torch.float16, device='npu')
+    x = _make_bitonic_1d(N, torch.float16)
     out = torch.empty(N, dtype=torch.float16, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=0)
     expected, _ = torch.sort(x)
@@ -76,9 +105,9 @@ def test_bitonic_merge_ascending_fp16(N):
 
 @pytest.mark.parametrize("N", [4, 8, 16, 32])
 def test_bitonic_merge_ascending_bf16(N):
-    """Bitonic merge on bfloat16 tensor, ascending order."""
+    """Bitonic merge on bfloat16 bitonic input, ascending order."""
     torch.manual_seed(0)
-    x = torch.randn(N, dtype=torch.bfloat16, device='npu')
+    x = _make_bitonic_1d(N, torch.bfloat16)
     out = torch.empty(N, dtype=torch.bfloat16, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=0)
     expected, _ = torch.sort(x)
@@ -87,9 +116,9 @@ def test_bitonic_merge_ascending_bf16(N):
 
 @pytest.mark.parametrize("N", [4, 8, 16, 32])
 def test_bitonic_merge_ascending_int32(N):
-    """Bitonic merge on int32 tensor, ascending order."""
+    """Bitonic merge on int32 bitonic input, ascending order."""
     torch.manual_seed(0)
-    x = torch.randint(0, 1000, (N,), dtype=torch.int32, device='npu')
+    x = _make_bitonic_1d(N, torch.int32)
     out = torch.empty(N, dtype=torch.int32, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=0)
     expected, _ = torch.sort(x)
@@ -98,9 +127,9 @@ def test_bitonic_merge_ascending_int32(N):
 
 @pytest.mark.parametrize("N", [4, 8, 16, 32])
 def test_bitonic_merge_ascending_int64(N):
-    """Bitonic merge on int64 tensor, ascending order."""
+    """Bitonic merge on int64 bitonic input, ascending order."""
     torch.manual_seed(0)
-    x = torch.randint(0, 1000, (N,), dtype=torch.int64, device='npu')
+    x = _make_bitonic_1d(N, torch.int64)
     out = torch.empty(N, dtype=torch.int64, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=0)
     expected, _ = torch.sort(x)
@@ -112,9 +141,9 @@ def test_bitonic_merge_ascending_int64(N):
 # ============================================================
 @pytest.mark.parametrize("N", [2, 4, 8, 16, 32, 64])
 def test_bitonic_merge_descending_fp32(N):
-    """Bitonic merge on float32 tensor, descending order."""
+    """Bitonic merge on float32 bitonic input, descending order."""
     torch.manual_seed(0)
-    x = torch.randn(N, dtype=torch.float32, device='npu')
+    x = _make_bitonic_1d(N, torch.float32)
     out = torch.empty(N, dtype=torch.float32, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=1)
     expected, _ = torch.sort(x, descending=True)
@@ -123,9 +152,9 @@ def test_bitonic_merge_descending_fp32(N):
 
 @pytest.mark.parametrize("N", [4, 8, 16, 32])
 def test_bitonic_merge_descending_int32(N):
-    """Bitonic merge on int32 tensor, descending order."""
+    """Bitonic merge on int32 bitonic input, descending order."""
     torch.manual_seed(0)
-    x = torch.randint(0, 1000, (N,), dtype=torch.int32, device='npu')
+    x = _make_bitonic_1d(N, torch.int32)
     out = torch.empty(N, dtype=torch.int32, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=N, DESCENDING=1)
     expected, _ = torch.sort(x, descending=True)
@@ -137,9 +166,9 @@ def test_bitonic_merge_descending_int32(N):
 # ============================================================
 @pytest.mark.parametrize("M,N", [(2, 4), (4, 8), (8, 16), (4, 32)])
 def test_bitonic_merge_2d_fp32(M, N):
-    """Bitonic merge on 2D float32 tensor along last dim."""
+    """Bitonic merge on 2D float32 bitonic rows along last dim."""
     torch.manual_seed(0)
-    x = torch.randn(M, N, dtype=torch.float32, device='npu')
+    x = _make_bitonic_2d(M, N, torch.float32)
     out = torch.empty(M, N, dtype=torch.float32, device='npu')
     bitonic_merge_2d_kernel[(1,)](x, out, M=M, N=N, DESCENDING=0)
     expected, _ = torch.sort(x, dim=-1)
@@ -148,9 +177,9 @@ def test_bitonic_merge_2d_fp32(M, N):
 
 @pytest.mark.parametrize("M,N", [(2, 4), (4, 8), (8, 16)])
 def test_bitonic_merge_2d_int32(M, N):
-    """Bitonic merge on 2D int32 tensor along last dim."""
+    """Bitonic merge on 2D int32 bitonic rows along last dim."""
     torch.manual_seed(0)
-    x = torch.randint(0, 1000, (M, N), dtype=torch.int32, device='npu')
+    x = _make_bitonic_2d(M, N, torch.int32)
     out = torch.empty(M, N, dtype=torch.int32, device='npu')
     bitonic_merge_2d_kernel[(1,)](x, out, M=M, N=N, DESCENDING=0)
     expected, _ = torch.sort(x, dim=-1)
@@ -159,9 +188,9 @@ def test_bitonic_merge_2d_int32(M, N):
 
 @pytest.mark.parametrize("M,N", [(4, 8), (8, 16)])
 def test_bitonic_merge_2d_descending_fp32(M, N):
-    """Bitonic merge on 2D float32 tensor along last dim, descending."""
+    """Bitonic merge on 2D float32 bitonic rows along last dim, descending."""
     torch.manual_seed(0)
-    x = torch.randn(M, N, dtype=torch.float32, device='npu')
+    x = _make_bitonic_2d(M, N, torch.float32)
     out = torch.empty(M, N, dtype=torch.float32, device='npu')
     bitonic_merge_2d_kernel[(1,)](x, out, M=M, N=N, DESCENDING=1)
     expected, _ = torch.sort(x, dim=-1, descending=True)
@@ -242,9 +271,14 @@ def test_bitonic_merge_all_equal():
 
 
 def test_bitonic_merge_with_negatives():
-    """Bitonic merge with negative values present."""
+    """Bitonic merge with negative values present in a bitonic sequence."""
     torch.manual_seed(0)
-    x = torch.randn(32, dtype=torch.float32, device='npu') * 10
+    # Build a bitonic sequence from a larger range that includes negatives.
+    half = 16
+    a = torch.sort(torch.randn(half, dtype=torch.float32, device='npu') * 10).values
+    b = torch.sort(torch.randn(half, dtype=torch.float32, device='npu') * 10,
+                   descending=True).values
+    x = torch.cat([a, b])  # bitonic sequence of length 32
     out = torch.empty(32, dtype=torch.float32, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=32, DESCENDING=0)
     expected, _ = torch.sort(x)
@@ -252,8 +286,12 @@ def test_bitonic_merge_with_negatives():
 
 
 def test_bitonic_merge_with_duplicates():
-    """Bitonic merge with duplicate values."""
-    x = torch.tensor([5, 2, 5, 1, 2, 8, 1, 8], dtype=torch.int32, device='npu')
+    """Bitonic merge on a bitonic sequence that contains duplicate values."""
+    # Build a bitonic sequence with duplicates:
+    #   ascending half: [1, 2, 2, 5]
+    #   descending half: [8, 8, 5, 1]
+    #   concatenated: [1, 2, 2, 5, 8, 8, 5, 1]  (bitonic)
+    x = torch.tensor([1, 2, 2, 5, 8, 8, 5, 1], dtype=torch.int32, device='npu')
     out = torch.empty(8, dtype=torch.int32, device='npu')
     bitonic_merge_kernel[(1,)](x, out, N=8, DESCENDING=0)
     expected, _ = torch.sort(x)
