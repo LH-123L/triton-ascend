@@ -37,8 +37,8 @@ def bitonic_merge_kernel(a_ptr, b_ptr, out_ptr, N: tl.constexpr):
 def test_bitonic_merge_basic():
     """bitonic_merge merging two ascending sequences"""
     N = 8
-    a = test_common.generate_tensor(N, "float32")
-    b = test_common.generate_tensor(N, "float32")
+    a = torch.tensor([1, 3, 5, 7, 9, 11, 13, 15], dtype=torch.float32, device='npu')
+    b = torch.tensor([2, 4, 6, 8, 10, 12, 14, 16], dtype=torch.float32, device='npu')
     out = torch.empty(2 * N, dtype=torch.float32, device='npu')
     bitonic_merge_kernel[(1,)](a, b, out, N=N)
     expected = torch.cat([a, b]).sort().values
@@ -49,8 +49,8 @@ def test_bitonic_merge_basic():
 def test_bitonic_merge_descending():
     """bitonic_merge merging two descending sequences"""
     N = 4
-    a = test_common.generate_tensor(N, "float32")
-    b = test_common.generate_tensor(N, "float32")
+    a = torch.tensor([15, 11, 7, 3], dtype=torch.float32, device='npu')
+    b = torch.tensor([14, 10, 6, 2], dtype=torch.float32, device='npu')
     out = torch.empty(2 * N, dtype=torch.float32, device='npu')
     bitonic_merge_kernel[(1,)](a, b, out, N=N)
     expected = torch.cat([a, b]).sort(descending=True).values
