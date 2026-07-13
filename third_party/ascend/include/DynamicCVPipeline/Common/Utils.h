@@ -46,9 +46,14 @@ inline constexpr llvm::StringLiteral kMainLoop = "ssbuffer.main_loop";
 inline constexpr llvm::StringLiteral kTcoreType = "hivm.tcore_type";
 inline constexpr llvm::StringLiteral kIf = "ssbuffer.if";
 inline constexpr llvm::StringLiteral kIntraBuffer = "ssbuffer.intra_buffer";
+inline constexpr llvm::StringLiteral kIntraBufCount = "ssbuffer.intra_buf_count";
+inline constexpr llvm::StringLiteral kInterCoreBufCount = "ssbuffer.inter_core_buf_count";
+inline constexpr llvm::StringLiteral kLoadStoreBufCount = "ssbuffer.load_store_buf_count";
 inline constexpr llvm::StringLiteral kAnalyzeFlagId = "ssbuffer.analyze_flag_id";
 inline constexpr llvm::StringLiteral kLoopCarriedL0C = "ssbuffer.loop_carried_l0c";
 inline constexpr llvm::StringLiteral kCrossDeps = "ssbuffer.crossDeps";
+inline constexpr llvm::StringLiteral kIntraDeps = "ssbuffer.intraDeps";
+inline constexpr llvm::StringLiteral kMemCrossDeps = "ssbuffer.memCrossDeps";
 inline constexpr llvm::StringLiteral kMayNotExec = "ssbuffer.may_not_exec";
 inline constexpr llvm::StringLiteral kClone = "ssbuffer.clone";
 static constexpr llvm::StringLiteral kInlinableQuantScaleAttr = "enable_fast_tf32_mul";
@@ -76,6 +81,9 @@ inline constexpr CoreType fromStrCoreType(std::string_view s)
 
     return CoreType::UNDETERMINED;
 }
+
+void setEnableCubeBlockMerge(bool enable);
+bool isCubeBlockMergeEnabled();
 
 // Functions for managing core types
 CoreType getOpCoreType(Operation *op);
