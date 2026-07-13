@@ -153,7 +153,7 @@ class NPUUtils(object):
                 print("[WAINING]NPU_DEVICE_LIMIT is incorrect. expected format is 14,28.")
                 print("[WAINING]The number of aicore and vector_core are accessed via the ACL interface.")
         if num_aic is None or num_aiv is None:
-            num_aic = self.npu_utils_mod.get_aicore_num()
+            num_aic = self._load_mod().get_aicore_num()
             num_aiv = num_aic * 2
         return {"max_shared_mem": 1, "num_aicore": num_aic, "num_vectorcore": num_aiv}
 
