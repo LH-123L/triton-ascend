@@ -47,6 +47,7 @@ from triton.backends.ascend.utils import (
 # TRITON_PROFILER_REGISTERED without a per-launch `import triton` + attribute walk.
 import triton.backends.ascend.utils as _ascend_utils
 
+from triton.backends.ascend import timing as _compile_timing
 
 def _get_cache_lock_path(cache):
     lock_path = getattr(cache, "lock_path", None)
@@ -166,11 +167,48 @@ class NPULauncher(object):
         self.enable_msprof_register_tensor = os.getenv("TRITON_REGISTER_TENSOR_MSPROF", 'false').lower() in ('true', '1')
         self.src = src
         self.metadata = metadata
-        self.so_launcher_path = self._make_launcher_stub_path()
+        _launcher_timer = _compile_timing.time_phase("launcher")
+        with _launcher_timer:
+            self.so_launcher_path = self._make_launcher_stub_path()
         # setup for remote run
         # TODO: use a var to pack all vars required to run on a remote machine
         self.mix_mode = metadata.mix_mode
         self.shared = metadata.shared
+
+        # --- Assemble and flush compile timing report ---
+        if _compile_timing._timing_enabled():
+            kernel_name = getattr(metadata, 'name', 'unknown')
+            kernel_hash = getattr(metadata, 'hash', 'unknown')
+            phases = {}
+
+            make_ttir_ms = getattr(metadata, 'timing_make_ttir_ms', None)
+            if make_ttir_ms is not None:
+                phases["make_ttir"] = {"elapsed_ms": round(make_ttir_ms, 4)}
+
+            ttir_to_linalg_ms = getattr(metadata, 'timing_ttir_to_linalg_ms', None)
+            if ttir_to_linalg_ms is not None:
+                phases["ttir_to_linalg"] = {
+                    "total_elapsed_ms": round(ttir_to_linalg_ms, 4),
+                    "passes": getattr(metadata, 'timing_ttir_to_linalg_passes', []),
+                }
+
+            linalg_to_bin_ms = getattr(metadata, 'timing_linalg_to_bin_ms', None)
+            if linalg_to_bin_ms is not None:
+                phases["linalg_to_bin"] = {
+                    "elapsed_ms": round(linalg_to_bin_ms, 4),
+                    "note": "external bishengir-compile, not decomposed",
+                }
+
+            phases["launcher"] = {
+                "elapsed_ms": round(_launcher_timer.elapsed_ms, 4),
+                "cold_start": False,
+            }
+
+            ir_stats = getattr(metadata, 'timing_ir_stats', {})
+            _compile_timing.record_kernel_timing(
+                kernel_name, kernel_hash, phases, ir_stats
+            )
+            _compile_timing._collector.flush()
         import importlib.util
         spec = importlib.util.spec_from_file_location("__triton_launcher", self.so_launcher_path)
         mod = importlib.util.module_from_spec(spec)
