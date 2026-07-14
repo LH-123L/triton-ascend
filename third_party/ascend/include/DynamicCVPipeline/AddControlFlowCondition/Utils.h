@@ -34,7 +34,6 @@ namespace triton {
 
 // Attribute names for DynamicCV pipeline
 inline constexpr llvm::StringLiteral kSSBufferIfAttr = "ssbuffer.if";
-inline constexpr llvm::StringLiteral kHIVMMatmulLimitedInCubeAttr = "hivm.matmul_limited_in_cube";
 
 // Collect all nested ops within an operation's regions
 LogicalResult collectAllNestedOps(Operation *op, llvm::DenseSet<Operation *> &regionOps);
@@ -62,6 +61,11 @@ int findTcbGroupId(Value v, llvm::DenseMap<int, SmallVector<Value>> &tightlyCoup
 // Set isCube/isVector based on the scope's tcore_type attribute
 // Returns failure if scopeOp does not have tcore_type attribute
 LogicalResult getScopeType(Operation *scopeOp, bool &isCube, bool &isVector);
+
+// Check if op is a scf.if whose body only contains hivm.hir.sync_block_wait,
+// hivm.hir.sync_block_set and hivm.fixpipe ops (excluding terminators).
+// Returns false if op is not a scf.if or contains any other op.
+bool isIfOpWithOnlySyncOps(Operation *op);
 
 } // namespace triton
 } // namespace mlir

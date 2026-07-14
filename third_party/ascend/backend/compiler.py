@@ -22,6 +22,7 @@ import ctypes
 import functools
 import hashlib
 import glob
+import json
 import os
 import re
 import subprocess
@@ -53,8 +54,6 @@ from triton.backends.ascend.utils import (
     triton_enable_libdevice_simt,
     get_cann_version_file_hash,
 )
-
-from triton.backends.ascend import timing as _compile_timing
 from triton.backends.ascend.driver import (
     NPUUtils
 )
@@ -119,28 +118,25 @@ def _adjust_metadata_by_module_result(mod, metadata, opt, **kwargs):
 
 
 def make_ttir(mod, metadata, opt):
-    _timer = _compile_timing.time_phase("make_ttir")
-    with _timer:
-        if "hash" not in metadata:
-            metadata["hash"] = hashlib.sha256(f"{mod}-{metadata}".encode()).hexdigest()
-        # the same optimize pass for triton-ir as all other backends
-        pm = ir.pass_manager(mod.context)
-        pm.enable_debug()
-        passes.common.add_inliner(pm)
-        passes.ttir.add_combine(pm)
-        passes.common.add_canonicalizer(pm)
-        passes.ttir.add_reorder_broadcast(pm)
-        passes.common.add_cse(pm)
-        passes.common.add_licm(pm)
-        passes.common.add_symbol_dce(pm)
-        passes.ttir.add_loop_unroll(pm)
-        pm.run(mod)
-        if opt.debug:
-            dump_manager = get_dump_manager(metadata["hash"])
-            print(f"Dumping intermediate results to {dump_manager.cache_dir}")
-            dump_manager.put(str(mod), "kernel.ttir.mlir", binary=False)
+    if "hash" not in metadata:
+        metadata["hash"] = hashlib.sha256(f"{mod}-{metadata}".encode()).hexdigest()
+    # the same optimize pass for triton-ir as all other backends
+    pm = ir.pass_manager(mod.context)
+    pm.enable_debug()
+    passes.common.add_inliner(pm)
+    passes.ttir.add_combine(pm)
+    passes.common.add_canonicalizer(pm)
+    passes.ttir.add_reorder_broadcast(pm)
+    passes.common.add_cse(pm)
+    passes.common.add_licm(pm)
+    passes.common.add_symbol_dce(pm)
+    passes.ttir.add_loop_unroll(pm)
+    pm.run(mod)
+    if opt.debug:
+        dump_manager = get_dump_manager(metadata["hash"])
+        print(f"Dumping intermediate results to {dump_manager.cache_dir}")
+        dump_manager.put(str(mod), "kernel.ttir.mlir", binary=False)
 
-    metadata["timing_make_ttir_ms"] = _timer.elapsed_ms
     return mod
 
 
@@ -181,8 +177,6 @@ def ttir_to_linalg(mod, metadata, opt, *, named_ops=False):
             auto_blockify_size = 1
         pm = ir.pass_manager(mod.context)
         pm.enable_debug()
-        if _compile_timing._timing_enabled():
-            pm.enable_timing()
         ascend.passes.ttir.add_auto_blockify(
             pm,
             auto_blockify_size
@@ -229,44 +223,23 @@ def ttir_to_linalg(mod, metadata, opt, *, named_ops=False):
             metadata["set_workspace_multibuffer"] = 0
             metadata["enable_mixed_cv"] = True
             metadata["disable_auto_inject_block_sync"] = True
+            ascend.passes.ttir.set_enable_cube_block_merge(metadata["enable_cube_block_merge"])
+
             ascend.passes.ttir.add_dynamic_cv_pipeline(pm, compile_on_910_95)
 
         _intra_val = metadata.get("intra_cache_num")
         if _intra_val is not None:
-            ascend.passes.ttir.set_buffer_count("INTRA", _intra_val)
+            ascend.passes.ttir.set_buffer_count(mod, "INTRA", _intra_val)
 
         _inter_val = metadata.get("inter_cache_num")
         if _inter_val is not None:
-            ascend.passes.ttir.set_buffer_count("INTER", _inter_val)
+            ascend.passes.ttir.set_buffer_count(mod, "INTER", _inter_val)
 
         _load_val = metadata.get("load_cache_num")
         if _load_val is not None:
-            ascend.passes.ttir.set_buffer_count("LOAD", _load_val)
+            ascend.passes.ttir.set_buffer_count(mod, "LOAD", _load_val)
 
-        ir_stats_before = _compile_timing.count_ir_ops(mod)
-        _total_timer = _compile_timing.time_phase("ttir_to_linalg")
-        with _total_timer:
-            if _compile_timing._timing_enabled():
-                import io as _io
-                import contextlib as _contextlib
-                _stderr_buf = _io.StringIO()
-                with _contextlib.redirect_stderr(_stderr_buf):
-                    pm.run(mod)
-                _timing_output = _stderr_buf.getvalue()
-                _passes = _compile_timing.parse_mlir_timing(_timing_output)
-            else:
-                pm.run(mod)
-                _passes = []
-
-        ir_stats_after = _compile_timing.count_ir_ops(mod)
-
-        metadata["timing_ttir_to_linalg_ms"] = _total_timer.elapsed_ms
-        metadata["timing_ttir_to_linalg_passes"] = _passes
-        metadata["timing_ir_stats"] = {
-            "num_ops_before": ir_stats_before,
-            "num_ops_after": ir_stats_after,
-        }
-        
+        pm.run(mod)
         _adjust_metadata_by_module_result(mod, metadata, opt,
                                           enable_mixed_cv=enable_mixed_cv,
                                           disable_auto_inject_block_sync=disable_auto_inject_block_sync,
@@ -652,24 +625,25 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
         if hfusion_enable_multiple_consumer_fusion:
             cmd_list += [f"--hfusion-enable-multiple-consumer-fusion={hfusion_enable_multiple_consumer_fusion}"]
 
+        enable_cross_if_fusion = metadata["enable_cross_if_fusion"]
+        if enable_cross_if_fusion:
+            cmd_list += [f"--hfusion-enable-cross-if-fusion={enable_cross_if_fusion}"]
+
         if opt.debug or os.getenv("TRITON_PRINT_AUTOTUNING", None) == "1":
             print(f"[DEBUG] cmd_list: {' '.join(cmd_list)}")
 
-        _bin_timer = _compile_timing.time_phase("linalg_to_bin")
-        with _bin_timer:
-            try:
-                ret = subprocess.run(
-                    cmd_list,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    check=True
-                )
-            except subprocess.CalledProcessError as e:
-                if opt.debug:
-                    _save_npuir_debug_output(e.stdout, e.stderr, tmpdir, metadata["hash"])
-                raise
-        metadata["timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
+        try:
+            ret = subprocess.run(
+                cmd_list,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            if opt.debug:
+                _save_npuir_debug_output(e.stdout, e.stderr, tmpdir, metadata["hash"])
+            raise
 
         if opt.debug:
             _save_npuir_debug_output(ret.stdout, ret.stderr, tmpdir, metadata["hash"])
@@ -880,21 +854,18 @@ def linalg_to_bin_enable_npu_compile_A2_A3(linalg: str, metadata, opt):
         if opt.debug or os.getenv("TRITON_PRINT_UBTUNING", None) == "1":
             print(f"[DEBUG] cmd_list: {' '.join(cmd_list)}")
 
-        _bin_timer = _compile_timing.time_phase("linalg_to_bin")
-        with _bin_timer:
-            try:
-                ret = subprocess.run(
-                    cmd_list,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    check=True
-                )
-            except subprocess.CalledProcessError as e:
-                if opt.debug:
-                    _save_npuir_debug_output(e.stdout, e.stderr, tmpdir, metadata["hash"])
-                raise
-        metadata["timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
+        try:
+            ret = subprocess.run(
+                cmd_list,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            if opt.debug:
+                _save_npuir_debug_output(e.stdout, e.stderr, tmpdir, metadata["hash"])
+            raise
 
         if opt.debug:
             _save_npuir_debug_output(ret.stdout, ret.stderr, tmpdir, metadata["hash"])
@@ -997,7 +968,12 @@ class NPUOptions:
     enable_mixed_cv: bool = None
     enable_vf_fusion: bool = None
     enable_dynamic_cv_pipeline: bool = True if is_compile_on_910_95 else False
+    # Gates the cube-loader penetration + cube-for block merge feature. Off by
+    # default so existing scenarios are unaffected; opt in per kernel to fuse a
+    # matmul's loader for-loop into the matmul's cube compute block.
+    enable_cube_block_merge: bool = False
     hfusion_enable_multiple_consumer_fusion: bool = False
+    enable_cross_if_fusion: bool = False
     has_auto_blockify_blacklist_op: Optional[bool] = None
     intra_cache_num: int = None
     inter_cache_num: int = None
@@ -1025,7 +1001,7 @@ class NPUOptions:
     disable_fma: bool = False
 
     # superblocking factor
-    superblock_factor: int = 0
+    superblock_factor: int = 1
 
     def __post_init__(self):
         # Parse compile_mode and set related fields
@@ -1080,8 +1056,7 @@ def ttir_to_npubin(mod, metadata, opt):
             _compile_option_list += [f"--threads-per-warp={opt.warp_size}"]
             if opt.enable_bishengir_simt_optimization != 000:
                 _compile_option_list += [f"--enable-bishengir-simt-optimization={opt.enable_bishengir_simt_optimization}"]
-            if opt.simt_stack_limit:
-                _compile_option_list += [f"--simt-stack-limit={opt.simt_stack_limit}"]
+            _compile_option_list += [f"--simt-stack-limit={get_simt_stack_limit()}"]
             if opt.shared_mem_dynamic_size is not None:
                 _compile_option_list += [f"--shared-mem-dynamic-size={opt.shared_mem_dynamic_size}"]
             if opt.enable_simt_reorder_instruction:
@@ -1102,7 +1077,7 @@ def ttir_to_npubin(mod, metadata, opt):
             # cap keys off the same env switch, so the two stay in sync.
             if _is_auto_map_parallel_blocks_enabled():
                 _compile_option_list += ["--enable-auto-blockify-loop"]
-                if opt.superblock_factor > 0:
+                if opt.superblock_factor > 1:
                     _compile_option_list += [f"--super-block-factor={opt.superblock_factor}"]
 
         npu_compiler_path, env = _get_npucompiler_path()
@@ -1111,16 +1086,34 @@ def ttir_to_npubin(mod, metadata, opt):
             + _compile_option_list
             + ["-o", bin_file]
         )
-        _bin_timer = _compile_timing.time_phase("linalg_to_bin")
-        with _bin_timer:
-            ret = subprocess.run(cmd_list, env=env, capture_output=True, check=True)
-        metadata["timing_linalg_to_bin_ms"] = _bin_timer.elapsed_ms
+        ret = subprocess.run(cmd_list, env = env, capture_output = True, check = True)
         if not Path(bin_path).exists():
             error_msg = ret.stderr.decode('utf-8')
             print(f"[DEBUG] {bin_path} is not found")
             print(f"[DEBUG] Stderr:\n{error_msg}")
             raise subprocess.CalledProcessError(ret.returncode, cmd_list, ret.stdout, ret.stderr)
         return Path(bin_path).read_bytes()
+
+
+def get_simt_stack_limit():
+    # simt_stack_limit resolution precedence: 
+    #  1.torch_npu's acl_default.json "StackSize":{"simt_stack_size":N}
+    #    takes precedence and the user-specified value is ignored.
+    #  2.if that config key is absent ,fail back to the kernel-time
+    #    default simt_stack_limit=1152
+    _simt_stack_limit = 1152
+    try:
+        import torch_npu
+        torch_npu_basic_path = os.path.dirname(torch_npu.__file__)
+        _acl_cfg_path = os.path.join(torch_npu_basic_path, "acl_default.json")
+        with open(_acl_cfg_path, "r") as f:
+            _acl_cfg = json.load(f)
+        _cfg_stack = _acl_cfg.get("StackSize", {}).get("simt_stack_size", None)
+        if _cfg_stack is not None and _cfg_stack > 0:
+            _simt_stack_limit = _cfg_stack
+    except Exception as e:
+        print(f"[DEBUG] read acl_default.json failed: {e}")
+    return _simt_stack_limit
 
 
 class AscendBackend(BaseBackend):

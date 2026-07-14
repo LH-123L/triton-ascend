@@ -20,24 +20,27 @@
  * THE SOFTWARE.
  */
 
-#include "ascend/include/DynamicCVPipeline/SplitDataflow/SeparateCVScope.h"
+#include <optional>
 
-#include "bishengir/Dialect/HIVM/IR/HIVM.h"
-#include "bishengir/Dialect/Scope/IR/Scope.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/Debug.h"
+
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Interfaces/LoopLikeInterface.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/Interfaces/LoopLikeInterface.h"
 #include "mlir/Pass/Pass.h"
 
-#include <optional>
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/Debug.h"
+#include "ascend/include/DynamicCVPipeline/Common/Utils.h"
+#include "ascend/include/DynamicCVPipeline/SplitDataflow/SeparateCVScope.h"
+
+#include "bishengir/Dialect/HIVM/IR/HIVM.h"
+#include "bishengir/Dialect/Scope/IR/Scope.h"
 
 using namespace mlir;
 
@@ -549,7 +552,7 @@ static UseCheckResult checkConditionUse(OpOperand &use, Operation *owner, unsign
     }
 
     unsigned idx = use.getOperandNumber();
-    if (conditionOp->getParentOp() != owner || idx == 0 || idx - 1 != slotIndex) {
+    if (conditionOp->getParentOp() != owner || idx == 0 || idx != slotIndex + 1) {
         Operation *parentOp = conditionOp->getParentOp();
         if (parentOp && !matchesScope(parentOp, scopeType)) {
             return UseCheckResult::Continue;
@@ -662,6 +665,18 @@ static bool needsLoopCarryPreserve(Operation *owner, unsigned slotIndex, StringR
     return false;
 }
 
+// Returns true when the producer op has no result belonging to scopeType .
+static bool isProducedByForeignScope(Value operand, StringRef scopeType)
+{
+    Operation *producer = operand.getDefiningOp();
+    if (!producer->hasAttr(CVPipeline::kCoreType)) {
+        return false;
+    }
+
+    // Only treat as foreign when the producer has NO result in the current scope.
+    return !matchesScope(producer, scopeType);
+}
+
 static LogicalResult neutralizeYieldInRegion(Operation *op, const CoreTypeInfo &info, StringRef scopeType, Location loc)
 {
     if (op->getNumRegions() == 0) {
@@ -684,12 +699,18 @@ static LogicalResult neutralizeYieldInRegion(Operation *op, const CoreTypeInfo &
                 if (info.getResultType(i) == scopeType) {
                     continue;
                 }
+
+                 // First defense: skip neutralization when an in-loop consumer reads the carried value through an iter_arg.
                 if (needsLoopCarryPreserve(op, i, scopeType)) {
                     continue;
                 }
 
                 Value oldOperand = yieldOp.getOperand(i);
-                if (i < op->getNumResults()) {
+
+                 // Second defense: skip the result-user check when the value is produced by a foreign-scope op to prevent it from being trapped.
+                bool isLoopOp = isa<scf::ForOp, scf::WhileOp>(op);
+                if ((!isLoopOp || !isProducedByForeignScope(oldOperand, scopeType)) &&
+                    i < op->getNumResults()) {
                     if (Operation *resultUser = findLiveUser(op->getResult(i), scopeType)) {
                         logDebug("skip neutralizing yield operand #", i, " for scope ", scopeType,
                                  " because parent result #", i, " still has live user '",
@@ -963,7 +984,7 @@ void mlir::triton::SeparateCVScopePass::runOnOperation()
     }
 
     module.walk([](scope::ScopeOp scopeOp) {
-        scopeOp->setAttr("hivm.matmul_limited_in_cube", UnitAttr::get(scopeOp->getContext()));
+        scopeOp->setAttr(CVPipeline::kHIVMMatmulLimitedInCubeAttr, UnitAttr::get(scopeOp->getContext()));
     });
 
     debugDumpOperation("after SeparateCVScopePass", module.getOperation());

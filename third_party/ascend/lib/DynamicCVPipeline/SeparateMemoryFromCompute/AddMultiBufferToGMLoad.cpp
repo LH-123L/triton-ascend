@@ -49,7 +49,7 @@ void AddMultiBufferToGMLoadPass::collectAndGroupMarkedOps()
 
     // Apply depth policy: skip loops whose compile-time trip count is too small
     // to benefit, then record the slot count on each group.
-    int depth = BufferCountManager::getInstance().getBufferCountByType(BufferCountManager::DepType::LoadStore);
+    int depth = BufferCountManager(module).getBufferCountByType(BufferCountManager::DepType::LoadStore);
     llvm::erase_if(contexts_, [depth](const ForBufferCtx &context) {
         if (auto tripCount = getConstantTripCount(context.forOp))
             return *tripCount <= depth;
@@ -169,6 +169,11 @@ namespace triton {
 std::unique_ptr<OperationPass<ModuleOp>> createAddMultiBufferToGMLoadPass()
 {
     return std::make_unique<AddMultiBufferToGMLoadPass>();
+}
+
+void registerAddMultiBufferToGMLoadPasses()
+{
+  registerPass([]() -> std::unique_ptr<mlir::Pass> { return createAddMultiBufferToGMLoadPass(); });
 }
 
 } // namespace triton
