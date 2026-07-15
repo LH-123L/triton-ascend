@@ -128,18 +128,12 @@ static PyObject *getArch(PyObject *self, PyObject *args) {
 }
 
 static PyObject *getAiCoreNum(PyObject *self, PyObject *args) {
-  int64_t aiCoreCnt;
-  int32_t deviceId;
-  aclError aclRet = aclrtGetDevice(&deviceId);
+  uint32_t aiCoreCnt;
 
-  if (aclRet != ACL_SUCCESS) {
-    printf("aclrtGetDevice failed, 0x%x", aclRet);
-    return nullptr;
-  }
-  
-  aclRet = aclrtGetDeviceInfo(static_cast<uint32_t>(deviceId),ACL_DEV_ATTR_AICORE_CORE_NUM, &aiCoreCnt);
-  if (aclRet != ACL_SUCCESS) {
-    printf("aclrtGetDeviceInfo failed, 0x%x", aclRet);
+  rtError_t rtRet = rtGetAiCoreCount(&aiCoreCnt);
+
+  if (rtRet != RT_ERROR_NONE) {
+    printf("rtGetAiCoreCount failed, 0x%x", rtRet);
     return nullptr;
   }
   if (PyErr_Occurred()) {
