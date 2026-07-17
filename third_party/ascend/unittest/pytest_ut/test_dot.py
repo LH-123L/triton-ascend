@@ -126,7 +126,6 @@ typelist = [
 ]
 
 
-@pytest.mark.skip(reason="not supported after the NPUIR is updated in April, and will be fixed later")
 @pytest.mark.parametrize("B, C, D", testlist2)
 @pytest.mark.parametrize("sigtype", typelist)
 def test_dot_2(restore_npu_hf32_setting, sigtype, B, C, D):
@@ -138,8 +137,6 @@ def test_dot_2(restore_npu_hf32_setting, sigtype, B, C, D):
     test_common.validate_cmp(sigtype, z, z_ref)
 
 
-@pytest.mark.xfail(
-    reason="Temporarily disabled: TA backend does not support allow_tf32 yet. Will be fixed in follow-up.")
 @pytest.mark.parametrize("B, C, D", testlist2)
 @pytest.mark.parametrize("sigtype", typelist)
 def test_dot_2_allow_tf32(restore_npu_hf32_setting, sigtype, B, C, D):
@@ -151,7 +148,6 @@ def test_dot_2_allow_tf32(restore_npu_hf32_setting, sigtype, B, C, D):
     test_common.validate_cmp(sigtype, z, z_ref)
 
 
-@pytest.mark.skip(reason="not supported after the NPUIR is updated in April, and will be fixed later")
 @pytest.mark.parametrize("B, C, D", testlist2)
 @pytest.mark.parametrize("sigtype", typelist)
 def test_dot_2_input_tf32(restore_npu_hf32_setting, sigtype, B, C, D):
@@ -180,6 +176,117 @@ def test_dot_2_ignore_tf32(sigtype, B, C, D):
         torch_npu.npu.matmul.allow_hf32 = original_allow_hf32
 
     triton_dot_2_ignore_tf32[1, 1, 1](z, x, y, B, C, D)
+    test_common.validate_cmp(sigtype, z, z_ref)
+
+
+# ==================== 4D and 5D dot test cases ====================
+# Triton 3.6 supports higher dimensional inputs for tl.dot
+# The last two dimensions are contracted, and the preceding dimensions are treated as batch
+
+@triton.jit
+def triton_dot_4d(output_ptr, x_ptr, y_ptr, 
+                  A: tl.constexpr, B: tl.constexpr, C: tl.constexpr, D: tl.constexpr):
+    """4D tensor dot: contract last two dims"""
+    aidx = tl.arange(0, A)
+    bidx = tl.arange(0, B)
+    cidx = tl.arange(0, C)
+    didx = tl.arange(0, D)
+
+    x_mask = (aidx[:, None, None] < A) & (bidx[None, :, None] < B) & (cidx[None, None, :] < C)
+    y_mask = (aidx[:, None, None] < A) & (cidx[None, :, None] < C) & (didx[None, None, :] < D)
+    out_mask = (aidx[:, None, None] < A) & (bidx[None, :, None] < B) & (didx[None, None, :] < D)
+    
+    # Compute linear indices for 4D tensors
+    Xidx = aidx[:, None, None] * B * C + bidx[None, :, None] * C + cidx[None, None, :]
+    Yidx = aidx[:, None, None] * C * D + cidx[None, :, None] * D + didx[None, None, :]
+    X = tl.load(x_ptr + Xidx, mask=x_mask, other=0.0)
+    Y = tl.load(y_ptr + Yidx, mask=y_mask, other=0.0)
+    
+    ret = tl.dot(X, Y, input_precision="hf32")
+    
+    oidx = aidx[:, None, None] * B * D + bidx[None, :, None] * D + didx[None, None, :]
+    tl.store(output_ptr + oidx, ret, mask=out_mask)
+
+
+@triton.jit
+def triton_dot_5d(output_ptr, x_ptr, y_ptr, 
+                  A: tl.constexpr, B: tl.constexpr, C: tl.constexpr, 
+                  D: tl.constexpr, E: tl.constexpr):
+    """5D tensor dot: contract last two dims"""
+    aidx = tl.arange(0, A)
+    bidx = tl.arange(0, B)
+    cidx = tl.arange(0, C)
+    didx = tl.arange(0, D)
+    eidx = tl.arange(0, E)
+
+    x_mask = (aidx[:, None, None, None] < A) & (bidx[None, :, None, None] < B) & \
+             (cidx[None, None, :, None] < C) & (didx[None, None, None, :] < D)
+    y_mask = (aidx[:, None, None, None] < A) & (bidx[None, :, None, None] < B) & \
+             (didx[None, None, :, None] < D) & (eidx[None, None, None, :] < E)
+    out_mask = (aidx[:, None, None, None] < A) & (bidx[None, :, None, None] < B) & \
+               (cidx[None, None, :, None] < C) & (eidx[None, None, None, :] < E)
+    
+    # Compute linear indices for 5D tensors
+    Xidx = aidx[:, None, None, None] * B * C * D + bidx[None, :, None, None] * C * D + \
+           cidx[None, None, :, None] * D + didx[None, None, None, :]
+    Yidx = aidx[:, None, None, None] * B * D * E + bidx[None, :, None, None] * D * E + \
+           didx[None, None, :, None] * E + eidx[None, None, None, :]
+    
+    X = tl.load(x_ptr + Xidx, mask=x_mask, other=0.0)
+    Y = tl.load(y_ptr + Yidx, mask=y_mask, other=0.0)
+    
+    ret = tl.dot(X, Y, input_precision="hf32")
+    
+    oidx = aidx[:, None, None, None] * B * C * E + bidx[None, :, None, None] * C * E + \
+           cidx[None, None, :, None] * E + eidx[None, None, None, :]
+    tl.store(output_ptr + oidx, ret, mask=out_mask)
+
+
+# 4D test parameters
+testlist_4d = [
+    (2, 8, 16, 12),   # A=2, B=8, C=16, D=12
+    (4, 4, 32, 16),   # A=4, B=4, C=32, D=16
+]
+
+# 5D test parameters  
+testlist_5d = [
+    (2, 2, 8, 16, 12),   # A=2, B=2, C=8, D=16, E=12
+    (2, 4, 4, 32, 16),   # A=2, B=4, C=4, D=32, E=16
+]
+
+
+@pytest.mark.parametrize("A, B, C, D", testlist_4d)
+@pytest.mark.parametrize("sigtype", typelist)
+def test_dot_4d(restore_npu_hf32_setting, sigtype, A, B, C, D):
+    """Test 4D tensor dot operation"""
+    x = test_common.generate_tensor((A, B, C), sigtype).npu()
+    y = test_common.generate_tensor((A, C, D), sigtype).npu()
+    z = torch.zeros((A, B, D), dtype=torch.float32).npu()
+    
+    # Reference: bmm over last two dims for each batch
+    z_ref = torch.zeros((A, B, D), dtype=torch.float32).npu()
+    for a in range(A):
+        z_ref[a] = torch.matmul(x[a], y[a])
+    
+    triton_dot_4d[1, 1, 1, 1](z, x, y, A, B, C, D)
+    test_common.validate_cmp(sigtype, z, z_ref)
+
+
+@pytest.mark.parametrize("A, B, C, D, E", testlist_5d)
+@pytest.mark.parametrize("sigtype", typelist)
+def test_dot_5d(restore_npu_hf32_setting, sigtype, A, B, C, D, E):
+    """Test 5D tensor dot operation"""
+    x = test_common.generate_tensor((A, B, C, D), sigtype).npu()
+    y = test_common.generate_tensor((A, B, D, E), sigtype).npu()
+    z = torch.zeros((A, B, C, E), dtype=torch.float32).npu()
+    
+    # Reference: bmm over last two dims for each batch
+    z_ref = torch.zeros((A, B, C, E), dtype=torch.float32).npu()
+    for a in range(A):
+        for b in range(B):
+            z_ref[a, b] = torch.matmul(x[a, b], y[a, b])
+    
+    triton_dot_5d[1, 1, 1, 1, 1](z, x, y, A, B, C, D, E)
     test_common.validate_cmp(sigtype, z, z_ref)
 
 

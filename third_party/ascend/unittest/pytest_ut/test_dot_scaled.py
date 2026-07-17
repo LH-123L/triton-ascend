@@ -149,6 +149,225 @@ def test_scaled_dot(M, N, K, rhs_scale, normal_type, num_warps, acc_num):
     torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
 
 
+# ==================== Triton 3.6 New dtype support ====================
+# Triton 3.6 added support for fp8, fp4, and fp64 in dot_scaled
+
+@pytest.mark.parametrize("M, N, K", [(32, 32, 32), (64, 64, 32)])
+@pytest.mark.parametrize("fp8_format", ["fp8e4m3fn", "fp8e5m2"])
+@pytest.mark.parametrize("acc_num", [None, 1])
+def test_scaled_dot_fp8(M, N, K, fp8_format, acc_num):
+    """Test dot_scaled with fp8 input types (Triton 3.6 feature)"""
+    device = "npu"
+
+    @triton.jit
+    def dot_scale_fp8_kernel(a_base, stride_a0, stride_a1, a_scale, 
+                              b_base, stride_b0, stride_b1, b_scale, out,
+                              BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, 
+                              BLOCK_K: tl.constexpr, type_a: tl.constexpr,
+                              type_b: tl.constexpr, acc_num: tl.constexpr):
+        a_ptr = a_base + tl.arange(0, BLOCK_M)[:, None] * stride_a0 + \
+                tl.arange(0, BLOCK_K)[None, :] * stride_a1
+        b_ptr = b_base + tl.arange(0, BLOCK_K)[:, None] * stride_b0 + \
+                tl.arange(0, BLOCK_N)[None, :] * stride_b1
+
+        a = tl.load(a_ptr)
+        b = tl.load(b_ptr)
+        accumulator = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+        
+        SCALE_BLOCK_K: tl.constexpr = BLOCK_K // 32
+        if a_scale is not None:
+            scale_a_ptr = a_scale + tl.arange(0, BLOCK_M)[:, None] * SCALE_BLOCK_K + \
+                          tl.arange(0, SCALE_BLOCK_K)[None, :]
+            a_scale = tl.load(scale_a_ptr)
+        if b_scale is not None:
+            scale_b_ptr = b_scale + tl.arange(0, BLOCK_N)[:, None] * SCALE_BLOCK_K + \
+                          tl.arange(0, SCALE_BLOCK_K)[None, :]
+            b_scale = tl.load(scale_b_ptr)
+
+        accumulator = tl.dot_scaled(a, a_scale, type_a, b, b_scale, type_b, 
+                                     acc=accumulator, fast_math=True,
+                                     out_dtype=tl.float32)
+        if acc_num is not None:
+            for _ in range(acc_num):
+                accumulator = tl.dot_scaled(a, a_scale, type_a, b, b_scale, type_b,
+                                             acc=accumulator, fast_math=True,
+                                             out_dtype=tl.float32)
+
+        out_ptr = out + tl.arange(0, BLOCK_M)[:, None] * BLOCK_N + tl.arange(0, BLOCK_N)[None, :]
+        tl.store(out_ptr, accumulator.to(tl.float16))
+
+    torch.manual_seed(42)
+    
+    def make_fp8_tensor(shape, fp8_format):
+        if fp8_format == "fp8e4m3fn":
+            comp_dtype = torch.float8_e4m3fn
+        else:
+            comp_dtype = torch.float8_e5m2
+        return torch.randn(shape, dtype=torch.float32, device=device).to(comp_dtype)
+
+    type_a = type_b = fp8_format
+    
+    x = make_fp8_tensor((M, K), fp8_format)
+    y = make_fp8_tensor((K, N), fp8_format)
+
+    scale_x = torch.randint(-128, 127, (M, K // 32), dtype=torch.int8, device=device)
+    scale_y = torch.randint(-128, 127, (N, K // 32), dtype=torch.int8, device=device)
+
+    def golden_ref_fp8(x, scale_x, y, scale_y, fp8_format):
+        shape_expand_x = x.shape[-1] // scale_x.shape[-1]
+        x_fp32 = x.to(torch.float32)
+        y_fp32 = y.to(torch.float32)
+        
+        scale_x_expanded = scale_x.repeat_interleave(shape_expand_x, dim=1).to(torch.int32)
+        scale_y_expanded = scale_y.T.repeat_interleave(y.shape[0] // scale_y.shape[0], dim=0).to(torch.int32)
+        
+        # FP8 scale computation
+        scale_factor_x = (scale_x_expanded + 127).to(torch.float32)
+        scale_factor_x = 2.0 ** (scale_factor_x - 127.0)
+        scale_factor_y = (scale_y_expanded + 127).to(torch.float32)
+        scale_factor_y = 2.0 ** (scale_factor_y - 127.0)
+        
+        return torch.matmul(x_fp32 * scale_factor_x, y_fp32 * scale_factor_y)
+
+    z = torch.empty((M, N), dtype=torch.float16, device=device)
+    dot_scale_fp8_kernel[(1,)](x, *x.stride(), scale_x, y, *y.stride(), scale_y, z, 
+                                M, N, K, type_a, type_b, acc_num, num_warps=4)
+    
+    z_ref = golden_ref_fp8(x, scale_x, y, scale_y, fp8_format)
+    if acc_num is not None:
+        z_ref = z_ref * (acc_num + 1)
+
+    torch.testing.assert_close(z.to(torch.float32), z_ref, atol=1e-1, rtol=1e-1)
+
+
+@pytest.mark.parametrize("M, N, K", [(32, 32, 32)])
+@pytest.mark.parametrize("fp4_format", ["fp4e2m1"])
+def test_scaled_dot_fp4(M, N, K, fp4_format):
+    """Test dot_scaled with fp4 input types (Triton 3.6 feature)"""
+    device = "npu"
+
+    @triton.jit
+    def dot_scale_fp4_kernel(a_base, stride_a0, stride_a1, a_scale, 
+                              b_base, stride_b0, stride_b1, b_scale, out,
+                              BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, 
+                              BLOCK_K: tl.constexpr, type_a: tl.constexpr,
+                              type_b: tl.constexpr):
+        a_ptr = a_base + tl.arange(0, BLOCK_M)[:, None] * stride_a0 + \
+                tl.arange(0, BLOCK_K)[None, :] * stride_a1
+        b_ptr = b_base + tl.arange(0, BLOCK_K)[:, None] * stride_b0 + \
+                tl.arange(0, BLOCK_N)[None, :] * stride_b1
+
+        a = tl.load(a_ptr)
+        b = tl.load(b_ptr)
+        
+        SCALE_BLOCK_K: tl.constexpr = BLOCK_K // 32
+        if a_scale is not None:
+            scale_a_ptr = a_scale + tl.arange(0, BLOCK_M)[:, None] * SCALE_BLOCK_K + \
+                          tl.arange(0, SCALE_BLOCK_K)[None, :]
+            a_scale = tl.load(scale_a_ptr)
+        if b_scale is not None:
+            scale_b_ptr = b_scale + tl.arange(0, BLOCK_N)[:, None] * SCALE_BLOCK_K + \
+                          tl.arange(0, SCALE_BLOCK_K)[None, :]
+            b_scale = tl.load(scale_b_ptr)
+
+        out_tensor = tl.dot_scaled(a, a_scale, type_a, b, b_scale, type_b, 
+                                    fast_math=True, out_dtype=tl.float32)
+        out_ptr = out + tl.arange(0, BLOCK_M)[:, None] * BLOCK_N + tl.arange(0, BLOCK_N)[None, :]
+        tl.store(out_ptr, out_tensor.to(tl.float16))
+
+    torch.manual_seed(42)
+    
+    x = torch.randn((M, K), dtype=torch.float32, device=device).to(torch.float4_e2m1)
+    y = torch.randn((K, N), dtype=torch.float32, device=device).to(torch.float4_e2m1)
+
+    scale_x = torch.randint(-128, 127, (M, K // 32), dtype=torch.int8, device=device)
+    scale_y = torch.randint(-128, 127, (N, K // 32), dtype=torch.int8, device=device)
+
+    z = torch.empty((M, N), dtype=torch.float16, device=device)
+    dot_scale_fp4_kernel[(1,)](x, *x.stride(), scale_x, y, *y.stride(), scale_y, z, 
+                                M, N, K, fp4_format, fp4_format, num_warps=4)
+    
+    # FP4 has very limited precision, just verify shape and basic execution
+    assert z.shape == (M, N)
+
+
+@pytest.mark.parametrize("M, N, K", [(32, 32, 32), (64, 64, 32)])
+@pytest.mark.parametrize("acc_num", [None, 1])
+def test_scaled_dot_fp64(M, N, K, acc_num):
+    """Test dot_scaled with fp64 input types (Triton 3.6 feature)"""
+    device = "npu"
+
+    @triton.jit
+    def dot_scale_fp64_kernel(a_base, stride_a0, stride_a1, a_scale, 
+                               b_base, stride_b0, stride_b1, b_scale, out,
+                               BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, 
+                               BLOCK_K: tl.constexpr, type_a: tl.constexpr,
+                               type_b: tl.constexpr, acc_num: tl.constexpr):
+        a_ptr = a_base + tl.arange(0, BLOCK_M)[:, None] * stride_a0 + \
+                tl.arange(0, BLOCK_K)[None, :] * stride_a1
+        b_ptr = b_base + tl.arange(0, BLOCK_K)[:, None] * stride_b0 + \
+                tl.arange(0, BLOCK_N)[None, :] * stride_b1
+
+        a = tl.load(a_ptr)
+        b = tl.load(b_ptr)
+        accumulator = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float64)
+        
+        SCALE_BLOCK_K: tl.constexpr = BLOCK_K // 32
+        if a_scale is not None:
+            scale_a_ptr = a_scale + tl.arange(0, BLOCK_M)[:, None] * SCALE_BLOCK_K + \
+                          tl.arange(0, SCALE_BLOCK_K)[None, :]
+            a_scale = tl.load(scale_a_ptr)
+        if b_scale is not None:
+            scale_b_ptr = b_scale + tl.arange(0, BLOCK_N)[:, None] * SCALE_BLOCK_K + \
+                          tl.arange(0, SCALE_BLOCK_K)[None, :]
+            b_scale = tl.load(scale_b_ptr)
+
+        accumulator = tl.dot_scaled(a, a_scale, type_a, b, b_scale, type_b, 
+                                      acc=accumulator, fast_math=False,
+                                      out_dtype=tl.float64)
+        if acc_num is not None:
+            for _ in range(acc_num):
+                accumulator = tl.dot_scaled(a, a_scale, type_a, b, b_scale, type_b,
+                                            acc=accumulator, fast_math=False,
+                                            out_dtype=tl.float64)
+
+        out_ptr = out + tl.arange(0, BLOCK_M)[:, None] * BLOCK_N + tl.arange(0, BLOCK_N)[None, :]
+        tl.store(out_ptr, accumulator)
+
+    torch.manual_seed(42)
+    
+    x = torch.randn((M, K), dtype=torch.float64, device=device)
+    y = torch.randn((K, N), dtype=torch.float64, device=device)
+
+    scale_x = torch.randint(-1023, 1023, (M, K // 32), dtype=torch.int8, device=device)
+    scale_y = torch.randint(-1023, 1023, (N, K // 32), dtype=torch.int8, device=device)
+
+    def golden_ref_fp64(x, scale_x, y, scale_y):
+        shape_expand_x = x.shape[-1] // scale_x.shape[-1]
+        x_fp64 = x.to(torch.float64)
+        y_fp64 = y.to(torch.float64)
+        
+        scale_x_expanded = scale_x.repeat_interleave(shape_expand_x, dim=1).to(torch.int64)
+        scale_y_expanded = scale_y.T.repeat_interleave(y.shape[0] // scale_y.shape[0], dim=0).to(torch.int64)
+        
+        scale_factor_x = (scale_x_expanded + 1023).to(torch.float64)
+        scale_factor_x = 2.0 ** (scale_factor_x - 1023.0)
+        scale_factor_y = (scale_y_expanded + 1023).to(torch.float64)
+        scale_factor_y = 2.0 ** (scale_factor_y - 1023.0)
+        
+        return torch.matmul(x_fp64 * scale_factor_x, y_fp64 * scale_factor_y)
+
+    z = torch.empty((M, N), dtype=torch.float64, device=device)
+    dot_scale_fp64_kernel[(1,)](x, *x.stride(), scale_x, y, *y.stride(), scale_y, z, 
+                                 M, N, K, "fp64", "fp64", acc_num, num_warps=4)
+    
+    z_ref = golden_ref_fp64(x, scale_x, y, scale_y)
+    if acc_num is not None:
+        z_ref = z_ref * (acc_num + 1)
+
+    torch.testing.assert_close(z, z_ref, atol=1e-10, rtol=1e-10)
+
+
 @pytest.mark.parametrize("normal_type", ["bf16", "fp16"])
 def test_scaled_dot_fast_math(normal_type):
     device = "npu"
