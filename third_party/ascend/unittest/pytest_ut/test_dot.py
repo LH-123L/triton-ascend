@@ -142,11 +142,15 @@ def test_dot_2(restore_npu_hf32_setting, sigtype, B, C, D):
 def test_dot_2_allow_tf32(restore_npu_hf32_setting, sigtype, B, C, D):
     x = test_common.generate_tensor((B, C), sigtype).npu()
     y = test_common.generate_tensor((C, D), sigtype).npu()
-    z_ref = torch_dot_None(x, y).to(torch.float32)
     z = torch.zeros((B, D), dtype=torch.float32).npu()
-    triton_dot_2_allow_tf32[1, 1, 1](z, x, y, B, C, D)
-    test_common.validate_cmp(sigtype, z, z_ref)
-
+    expected_msg = "allow_tf32 is not supported as 'True'"
+    try:
+        triton_dot_2_allow_tf32[1, 1, 1](z, x, y, B, C, D)
+    except Exception as e:
+        if expected_msg in str(e):
+            return
+    pytest.fail(f"Expected exception containing '{expected_msg}', but no exception was raised")
+    
 
 @pytest.mark.parametrize("B, C, D", testlist2)
 @pytest.mark.parametrize("sigtype", typelist)
