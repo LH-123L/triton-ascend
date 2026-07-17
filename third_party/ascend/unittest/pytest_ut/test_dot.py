@@ -268,7 +268,7 @@ def test_dot_4d(restore_npu_hf32_setting, sigtype, A, B, C, D):
     for a in range(A):
         z_ref[a] = torch.matmul(x[a], y[a])
     
-    triton_dot_4d[1, 1, 1, 1](z, x, y, A, B, C, D)
+    triton_dot_4d[1, 1, 1](z, x, y, A, B, C, D)
     test_common.validate_cmp(sigtype, z, z_ref)
 
 
@@ -286,7 +286,7 @@ def test_dot_5d(restore_npu_hf32_setting, sigtype, A, B, C, D, E):
         for b in range(B):
             z_ref[a, b] = torch.matmul(x[a, b], y[a, b])
     
-    triton_dot_5d[1, 1, 1, 1, 1](z, x, y, A, B, C, D, E)
+    triton_dot_5d[1, 1, 1](z, x, y, A, B, C, D, E)
     test_common.validate_cmp(sigtype, z, z_ref)
 
 
