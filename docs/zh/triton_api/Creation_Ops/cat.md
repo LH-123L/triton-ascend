@@ -16,7 +16,7 @@ triton.language.cat(input, other, can_reorder=False, _semantic=None)
 | ------------- | ----------------- | ---------------------------- |
 | `input`           | `Tensor`               | 拼接的第一个tensor |
 | `other`            | `Tensor`               | 拼接的第二个tensor |
-| `can_reorder`            | `Bool`               | 重新排序 – 编译器提示。如果为真，编译器在连接输入时允许重新排序元素。仅支持can_reorder=True。  |
+| `can_reorder`            | `Bool`               | 编译器提示 - 当为True时，允许编译器在连接输入时重新排序元素以优化性能。  |
 | `_semantic`            | `Optional[str]`               | 保留参数，暂不支持外部调用 |
 
 返回值：
@@ -28,7 +28,7 @@ triton.language.cat(input, other, can_reorder=False, _semantic=None)
 
 || uint8 | int8 | uint16 | int16 | uint32 | int32 | uint64 | int64 | fp16 | fp32 | bf16 | bool/int1 |
 |---| ------- | ------ | -------- | ------- | -------- | ------- | -------- | ------- | ------ | ------ | ------ | ----------- |
-| Ascend A2/A3 | ✓ | ✓ | × | ✓ | × | ✓ | × | ✓ | ✓ | ✓ | ✓ | ✓ | 
+| Ascend A2/A3 | ✓ | ✓ | × | ✓ | × | ✓ | × | ✓ | ✓ | ✓ | ✓ | ✓ |
 | GPU支持 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 #### 2.2.2 Shape 支持

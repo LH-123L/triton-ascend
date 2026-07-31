@@ -19,7 +19,7 @@ triton.language.umulhi(x, y, _semantic=None)
 | `_semantic`   | -                 | 保留参数，暂不支持外部调用           |
 
 返回值：
-`x`：输出张量的shape与输入x的shape相同
+输出张量的shape与输入x的shape相同
 
 ### 2.2 OP 规格
 
@@ -30,8 +30,8 @@ triton.language.umulhi(x, y, _semantic=None)
 | GPU    | ×    | ×     | √     | ×     | ×     | ×      | ×      | √     | ×    | ×    | ×    | ×    | ×    |
 | Ascend A2/A3 | ×    | ×     | √     | ×     | ×     | ×      | ×      | ×     | ×    | ×    | ×    | ×    | ×    |
 
-结论：Ascend 比 GPU 少了int64的支持。
-torch_npu对u8的支持。
+结论：Ascend 相比 GPU 缺失 int64 支持。
+torch_npu 对 uint8 的支持。
 
 #### 2.2.2 Shape 支持
 
@@ -48,7 +48,7 @@ int64不支持
 
 ### 2.4 使用方法
 
-以下示例实现了对输入张量 `x` 做显著N位：
+以下示例实现了对输入张量 `x` 和 `y` 的乘积取最显著N位：
 
 ```python
 @triton.jit

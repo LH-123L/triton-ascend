@@ -59,7 +59,7 @@ triton.language.store(
 
 1. 若`pointer`是一个单指针：
    - 此时`value`和`mask`必须是一个标量
-   - `other`会隐式类型转换成`pointer.dtype.element_ty`的数据类型
+   - `value`会隐式类型转换成`pointer.dtype.element_ty`的数据类型
    - 此时不允许传入`boundary_check`
 2. 若`pointer`是一个N-Dimensional tensor：
    - `mask`和`value`会隐式广播到和`pointer`相同的shape
@@ -96,12 +96,12 @@ def triton_ldst_indirect_08_kernel(
     tmp1 = tl.load(in_ptr1 + in_idx1)
     in_idx2 = tmp0[:, None] * stride_in_r + tmp1[None, :]
     tmp2 = tl.load(in_ptr2 + in_idx2)
-    tmp2 = tl_math.exp(tmp2)
+    tmp2 = tl.math.exp(tmp2)
     tmp3 = tl.load(in_ptr3 + in_idx1)
     tmp3 = tmp3 + 1 - 8
     out0_idx = in_idx0[:, None] * RS + tmp3[None, :]
     tl.store(out_ptr0 + out0_idx, tmp2)
-    
+
 def triton_ldst_indirect_08_func(xc, x2, xs, rs): # [8-24] ori 8 16
     nr = x2.size()[0]
     nc = xc.numel()
@@ -112,13 +112,13 @@ def triton_ldst_indirect_08_func(xc, x2, xs, rs): # [8-24] ori 8 16
     triton_ldst_indirect_08_kernel[nr // xs, 1, 1](
         y0, xc, x2, xc1, stride_in_r, XS = xs, RS = rs)
     return y0
-    
+
 def torch_ldst_indirect_08_func(xr, xc, x2):
     flatten_idx = (xr[:, None] * x2.stride()[0] + xc[None, :]).flatten()
     extracted = x2.flatten()[flatten_idx].reshape([xr.numel(), xc.numel()])
     print(extracted)
     return torch.exp(extracted)
-    
+
 DEV = "npu"
 DTYPE = torch.float32
 offset = 8

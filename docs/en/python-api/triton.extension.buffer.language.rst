@@ -1,1 +1,0 @@
-../../zh/python-api/triton.extension.buffer.language.rst

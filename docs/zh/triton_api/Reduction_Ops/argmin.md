@@ -20,7 +20,7 @@ triton.language.argmin(input, axis, tie_break_left=True, keep_dims=False)
 | `tie_break_left` | `bool` | 如果多个元素有相同的最小值，返回最左侧最小值的下标 |
 
 返回值：
-`tl.tensor`：同`input`的shape的张量
+`tl.tensor`：包含最小值索引的张量，其shape取决于axis和keep_dims参数，当keep_dims=False时通常比input少一个维度
 
 ### 2.2 支持规格
 
@@ -29,7 +29,7 @@ triton.language.argmin(input, axis, tie_break_left=True, keep_dims=False)
 || uint8 | int8 | uint16 | int16 | uint32 | int32 | uint64 | int64 | fp16 | fp32 | bf16 | bool/int1 |
 |---| ------- | ------ | -------- | ------- | -------- | ------- | -------- | ------- | ------ | ------ | ------ | ----------- |
 |GPU| √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ |
-|Ascend A2A3系列| √ | √ | x | √ | × | √ | × | √ | √ | √ | √ | √ |
+|Ascend A2A3系列| √ | √ | × | √ | × | √ | × | √ | √ | √ | √ | √ |
 
 #### 2.2.2 Shape 支持
 

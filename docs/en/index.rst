@@ -37,12 +37,9 @@ Documentation
 
 **API Reference**
 
-- :doc:`triton <python-api/triton>`
-- :doc:`triton.language <python-api/triton.language>`
-- :doc:`triton.testing <python-api/triton.testing>`
-- :doc:`triton.language.extra.cann.extension <python-api/triton.language.extra.cann.extension>`
-- :doc:`triton.language.extra.cann.libdevice <python-api/triton.language.extra.cann.libdevice>`
-- :doc:`triton.extension.buffer.language <python-api/triton.extension.buffer.language>`
+- :doc:`triton.language API <triton_api/index>`
+- :doc:`triton <triton_api/triton/index>`
+- :doc:`Libdevice Developer Guide <libdevice/libdevice_developer_guide>`
 
 **Features**
 
@@ -62,6 +59,8 @@ Documentation
 - :doc:`Contributors <community/CONTRIBUTOR>`
 - :doc:`Security Note <community/SECURITYNOTE>`
 
+
+.. toctree sidebar navigation.
 
 .. toctree::
    :hidden:
@@ -98,12 +97,9 @@ Documentation
    :titlesonly:
    :caption: API Reference
 
-   triton <python-api/triton>
-   triton.language <python-api/triton.language>
-   triton.testing <python-api/triton.testing>
-   triton.language.extra.cann.extension <python-api/triton.language.extra.cann.extension>
-   triton.language.extra.cann.libdevice <python-api/triton.language.extra.cann.libdevice>
-   triton.extension.buffer.language <python-api/triton.extension.buffer.language>
+   triton.language API <triton_api/index>
+   triton <triton_api/triton/index>
+   Libdevice Developer Guide <libdevice/libdevice_developer_guide>
 
 .. toctree::
    :hidden:

@@ -14,7 +14,7 @@ triton.language.static_print(*values, sep: str = ' ', end: str = '\n', file=None
 
 | 参数 | 类型 | 默认值 | 含义说明 |
 |------|------|--------|----------|
-| `values`| `tensor`/`scalar`| 必需 | 要打印的值，支持多个参数 |
+| `values`| `constexpr` | 必需 | 要打印的值，支持多个参数（必须是编译期常量） |
 | `sep` | `str` | `' '` | 值之间的分隔符 |
 | `end` | `str` | `'\n'` | 打印结束时的后缀 |
 |`file` | - | - | 写入的文件对象 |
@@ -66,9 +66,9 @@ import triton.language as tl
 
 @triton.jit
 def basic_static_print_example(x_ptr, BLOCK_SIZE: tl.constexpr):
-    idx = arange(0,4)
+    idx = tl.arange(0, 4)
     val = tl.load(x_ptr + idx)
     tl.static_print("val:",val)
-    #非常量不支fstring打印
+    #非常量不支持fstring打印
     #tl.static_print(f"val:{val}")
 ```

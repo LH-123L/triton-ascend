@@ -6,8 +6,8 @@
 
 ```python
 triton.language.semantic.greater_than(
- input: tl.tensor, 
- other: tl.tensor, 
+ input: tl.tensor,
+ other: tl.tensor,
  builder: ir.builder
 ) -> tl.tensor
 ```
@@ -22,7 +22,7 @@ triton.language.semantic.greater_than(
 | :---: | :---: | --- |
 | `input` | `tensor` | 张量数据，左操作数，代表要进行比较的主数据 |
 | `other`   | `tensor` | 张量数据，右操作数，与`input`逐元素进行比较 |
-| `_builder` | - | 保留参数，暂不支持外部调用 |
+| `builder` | - | 保留参数，暂不支持外部调用 |
 
 返回值：
 `tl.tensor`：同`input`的shape的张量
@@ -36,7 +36,7 @@ triton.language.semantic.greater_than(
 | GPU      | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ |
 | Ascend A2/A3 | √ | √ | √ | √ | × | × | × | √ | √ | √ | × | √ | √ |
 
-结论：Ascend 对比 GPU 缺失uint、fp64的支持能力。
+结论：Ascend 对比 GPU 缺失 uint16/uint32/uint64、fp64 的支持能力。
 
 #### 2.2.2 Shape 支持
 
@@ -51,7 +51,7 @@ triton.language.semantic.greater_than(
 
 > 相对社区能力缺失且无法实现
 
-Ascend 对比 GPU 缺失uint、fp64的支持能力。
+Ascend 对比 GPU 缺失 uint16/uint32/uint64、fp64 的支持能力。
 
 ### 2.4 使用方法
 
