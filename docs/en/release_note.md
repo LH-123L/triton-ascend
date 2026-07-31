@@ -1,110 +1,110 @@
-# Triton-Ascend 版本发布
+# Triton-Ascend Releases
 
-Triton-Ascend 版本提供了一个稳定的代码基础快照，封装成可以通过 PyPI 轻松安装的二进制包。此外，版本发布代表着开发团队可以向社区正式宣布新功能的可用性、已完成的改进以及可能影响用户的变化（例如破坏性变更）。
+Triton-Ascend releases provide a stable snapshot of the codebase, packaged as binary distributions that can be easily installed via PyPI. In addition, a release represents the formal announcement by the development team to the community of the availability of new features, completed improvements, and changes that may affect users (e.g., breaking changes).
 
-## 发布兼容性矩阵
+## Release Compatibility Matrix
 
-以下是 Triton-Ascend 版本的发布兼容性矩阵：
+The following is the release compatibility matrix for Triton-Ascend versions:
 
-| Triton-Ascend 版本 | Python 版本 | Manylinux 版本 | 硬件平台 | 硬件产品 |
+| Triton-Ascend Version | Python Version | Manylinux Version | Hardware Platform | Hardware Product |
 | --- | --- | --- | --- | --- |
 | 3.2.0 | >=3.9, <=3.11 | glibc 2.27+, x86-64, aarch64  | Ascend NPU | Atlas A2/A3|
 
-## 发布计划
+## Release Schedule
 
-以下是 Triton-Ascend 的发布计划。请注意：补丁版本是可选的。
+The following is the Triton-Ascend release schedule. Note that patch releases are optional.
 
-| 主版本 | 发布分支切出时间 | 发布日期 | 补丁发布日期 |
+| Major Version | Release Branch Cut Date | Release Date | Patch Release Date |
 | --- | --- | --- | --- |
-| 3.2.0 | 2025年12月08日 | 2026年1月 | --- |
+| 3.2.0 | December 08, 2025 | January 2026 | --- |
 
-## 版本亮点
+## Release Highlights
 
 ### Triton-Ascend 3.2.0
 
-**首次发布：Ascend NPU 支持**
+**First Release: Ascend NPU Support**
 
-Triton-Ascend 3.2.0 是第一个正式支持华为 Ascend NPU 的 Triton 版本。此版本基于 Triton 3.2.0 社区版本，专门适配 Ascend NPU 硬件架构。
+Triton-Ascend 3.2.0 is the first Triton release with official support for Huawei Ascend NPUs. This release is based on the community Triton 3.2.0 version and is specifically adapted to the Ascend NPU hardware architecture.
 
-#### 主要特性
+#### Key Features
 
-1. **Ascend NPU 全栈支持**
-   - 完整的 Triton IR 到 NPU 指令集编译流水线
-   - 支持全部 Triton Ops
+1. **Full-Stack Ascend NPU Support**
+   - A complete compilation pipeline from Triton IR to the NPU instruction set
+   - Support for all Triton ops
 
-2. **性能优化**
-   - NPU 特定内核优化
-   - CV 计算优化
+2. **Performance Optimizations**
+   - NPU-specific kernel optimizations
+   - CV compute optimizations
 
-3. **开发者工具**
-   - 支持全面的调试输出
-   - 编译中间产物转储
+3. **Developer Tools**
+   - Comprehensive debug output support
+   - Dump of intermediate compilation artifacts
 
-#### 已知限制
+#### Known Limitations
 
-1. **数据类型**: 部分数据类型支持仍在完善中
-2. **算子覆盖**: 正在持续扩展支持的算子集合
+1. **Data Types**: Support for some data types is still being improved
+2. **Op Coverage**: The set of supported ops is being continuously expanded
 
-#### 迁移指南
+#### Migration Guide
 
-对于现有 Triton GPU 用户迁移到 Ascend NPU，详见 [GPU Triton算子迁移](./migration_guide/migrate_from_gpu.md)
+For existing Triton GPU users migrating to Ascend NPU, see [GPU Triton Operator Migration](./migration_guide/migrate_from_gpu.md)
 
-## 版本发布策略
+## Release Strategy
 
-### 版本编号
+### Version Numbering
 
-Triton-Ascend 遵循 [PEP 440](https://peps.python.org/pep-0440/) 版本规范，版本号与上游 Triton 对齐：`vMAJOR.MINOR.PATCH[rcN][.postN]`
+Triton-Ascend follows the [PEP 440](https://peps.python.org/pep-0440/) versioning specification, with version numbers aligned with upstream Triton: `vMAJOR.MINOR.PATCH[rcN][.postN]`
 
-- **MAJOR.MINOR**：与上游 Triton 版本一一对应，例如 Triton-Ascend `3.2` 基于 Triton `3.2`
-- **PATCH**：Triton-Ascend 的 `PATCH` 版本可能高于上游 Triton，用于 `MAJOR.MINOR` 级别的问题修复或改进，例如 Triton-Ascend `3.2.0` 和 `3.2.1` 均基于 Triton `3.2.0`
-- **rcN**：发布候选版本，根据需要发布以供社区早期测试和反馈
-- **postN**：已发布版本的后续补丁，根据需要发布以修复稳定版本中的问题
+- **MAJOR.MINOR**: Corresponds one-to-one with upstream Triton versions; for example, Triton-Ascend `3.2` is based on Triton `3.2`
+- **PATCH**: Triton-Ascend's `PATCH` version may be higher than upstream Triton, used for bug fixes or improvements at the `MAJOR.MINOR` level; for example, both Triton-Ascend `3.2.0` and `3.2.1` are based on Triton `3.2.0`
+- **rcN**: Release candidate versions, published as needed for early community testing and feedback
+- **postN**: Post-releases of already published versions, published as needed to fix issues in stable releases
 
-### 分支策略
+### Branch Strategy
 
-- `main` 分支为最新开发分支，跟踪最新上游 Triton 版本
-- 每个发布版本创建对应的发布开发分支（如 `release/3.2.x`），与社区发布具有相同的 commit id
-- 功能开发应在 fork 仓库中进行，通过 `PR` 合入 Triton-Ascend 仓库
+- The `main` branch is the latest development branch, tracking the latest upstream Triton version
+- A release development branch is created for each release (e.g., `release/3.2.x`), sharing the same commit IDs as the community releases
+- Feature development should be done in a fork of the repository and merged into the Triton-Ascend repository via `PR`
 
-**`main` 分支映射：**
+**`main` branch mapping:**
 
-| Triton-Ascend | Triton commit hash                                           | Python    | CANN  | PyTorch | LLVM commit hash                                             | 补丁                                                        |
+| Triton-Ascend | Triton commit hash                                           | Python    | CANN  | PyTorch | LLVM commit hash                                             | Patch                                                        |
 | ------------- | ------------------------------------------------------------ | --------- | ----- | ------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | `main`        | [85400f8](https://github.com/triton-lang/triton-ascend/commit/85400f8) | `3.9~3.13` | `9.0.0` | `2.10.0`   | [f6ded0b](https://github.com/llvm/llvm-project/commit/f6ded0b) | [llvm_patch_f6ded0b.patch](https://github.com/triton-lang/triton-ascend/blob/main/third_party/ascend/patch/llvm_patch_f6ded0b.patch) |
 
-### 维护分支与生命周期
+### Maintenance Branches and Lifecycle
 
-维护分支状态包括：
+Maintenance branch statuses include:
 
-- **活跃（Active）**：持续接受缺陷修复、功能改进和安全补丁；将继续演进功能或发布新版本
-- **维护（Maintenance）**：仅接受关键缺陷修复和安全补丁；不再发布功能改进
-- **停止维护（End of Life）**：不再接受任何修复；分支维护已停止
+- **Active**: Continuously accepts bug fixes, feature improvements, and security patches; features will continue to evolve or new releases will be published
+- **Maintenance**: Only accepts critical bug fixes and security patches; no feature improvements are released
+- **End of Life**: No fixes are accepted; maintenance of the branch has stopped
 
-| 分支              | 状态     | Triton 版本 | Triton-Ascend 发布              | 维护截止 |
+| Branch              | Status     | Triton Version | Triton-Ascend Release              | End of Maintenance |
 | ----------------- | -------- | ------------ | ----------------------------------- | -------- |
-| `main`            | `活跃`   | `3.6.0`      | /                                   | /        |
-| `release/3.2.1` | `活跃`   | `3.2.0`      | `3.2.1`                             | /        |
-| `release/3.2.x` | `维护`   | `3.2.0`      | `3.2.0rc2`，`3.2.0rc3`，`3.2.0rc4`，`3.2.0` | /        |
+| `main`            | `Active`   | `3.6.0`      | /                                   | /        |
+| `release/3.2.1` | `Active`   | `3.2.0`      | `3.2.1`                             | /        |
+| `release/3.2.x` | `Maintenance`   | `3.2.0`      | `3.2.0rc2`，`3.2.0rc3`，`3.2.0rc4`，`3.2.0` | /        |
 
-## 发布周期
+## Release Cycle
 
-- **稳定版本**：按照项目版本节奏发布，并非每个上游 Triton 版本都会有对应的稳定发布
-- **rc 版本**：与上游 Triton 版本节奏同步发布，供用户早期测试
-- **post 版本**：根据需要发布，用于修复现有稳定版本中的问题
+- **Stable releases**: Released according to the project's version cadence; not every upstream Triton version has a corresponding stable release
+- **rc releases**: Released in sync with the upstream Triton version cadence, for early user testing
+- **post releases**: Published as needed to fix issues in existing stable releases
 
-### 发布时间线
+### Release Timeline
 
-| 日期       | 事件                     |
+| Date       | Event                     |
 | ---------- | ------------------------ |
-| 2026-05-06 | 发布稳定版本 `3.2.1`     |
-| 2026-01-21 | 发布稳定版本 `3.2.0`     |
-| 2025-11-14 | 发布预览版本 `3.2.0rc4`  |
-| 2025-11-12 | 发布预览版本 `3.2.0rc3`  |
-| 2025-05-26 | 发布预览版本 `3.2.0rc2`  |
+| 2026-05-06 | Release stable version `3.2.1`     |
+| 2026-01-21 | Release stable version `3.2.0`     |
+| 2025-11-14 | Release preview version `3.2.0rc4`  |
+| 2025-11-12 | Release preview version `3.2.0rc3`  |
+| 2025-05-26 | Release preview version `3.2.0rc2`  |
 
-## 版本兼容性矩阵
+## Version Compatibility Matrix
 
-| Triton-Ascend | Triton | Python              | CANN  | PyTorch | LLVM commit hash | LLVM 补丁 |
+| Triton-Ascend | Triton | Python              | CANN  | PyTorch | LLVM commit hash | LLVM Patch |
 | ------------- | ------ | ------------------- | ----- | ------- | ---------------- | --------- |
 | `3.2.1`       | `3.2.0` | `3.9`(x86), `3.10-3.13` | `9.0.0` | `2.7.1`   | `b5cc222`        | -         |
 | `3.2.0`       | `3.2.0` | `3.9-3.11`          | `8.5.0` | `2.6.0`   | `b5cc222`        | -         |

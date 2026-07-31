@@ -1,55 +1,54 @@
-# 快速入门
+# Quick Start
 
-## 项目介绍
+## Project Introduction
 
-**Triton-Ascend**是适配华为Ascend处理器的Triton优化版本，用于高效进行核函数自动调优、算子编译及部署，通过兼容Triton核心语法并针对昇腾NPU特性进行深度优化，能够帮助用户在昇腾平台上快速开发和部署高性能计算任务。
+**Triton-Ascend** is an optimized version of Triton adapted for Huawei Ascend processors. It is used for efficient automatic kernel tuning, operator compilation, and deployment. By remaining compatible with Triton's core syntax while being deeply optimized for Ascend NPU features, it helps users quickly develop and deploy high-performance computing tasks on the Ascend platform.
 
-本文以**Ubuntu 22.04**环境下通过软件包部署方式在线安装并运行向量加法实例为例，指导用户快速上手使用**Triton-Ascend**。如需体验更多安装方式请阅读[安装指南](./installation_guide.md)文档。
+This document uses the online installation and running of the vector addition example via the software package deployment method in an **Ubuntu 22.04** environment as an example, guiding users to quickly get started with **Triton-Ascend**. For more installation methods, please refer to the [Installation Guide](./installation_guide.md).
 
-## 环境准备
+## Environment Preparation
 
-**硬件要求**
+**Hardware Requirements**
 
-支持的操作系统：linux（aarch64/x86_64）
+Supported operating systems: Linux (aarch64/x86_64)
 
-支持的Ascend产品：Atlas A2/A3/950系列
+Supported Ascend products: Atlas A2/A3/950 series
 
-最小硬件配置：单卡32GB内存（推荐）
+Minimum hardware configuration: 32 GB memory per card (recommended)
 
-**软件依赖**
+**Software Dependencies**
 
-确定CANN、Python和TorchNPU软件版本并安装。其中，可以参考昇腾社区官网《[CANN快速安装](https://www.hiascend.com/cann/download)》
-完成驱动与固件安装。
+Determine and install the CANN, Python, and TorchNPU software versions. For the driver and firmware installation, you can refer to [CANN Quick Installation](https://www.hiascend.com/cann/download) on the Ascend community official website.
 
-- CANN版本：9.0.0
-- Python版本：python3.11
-- TorchNPU版本：2.7.1.post4
+- CANN version: 9.0.0
+- Python version: python3.11
+- TorchNPU version: 2.7.1.post4
 
-注：更多配套关系请参考[版本说明表](./release_note.md#版本兼容性矩阵)。
+Note: For more compatibility relationships, please refer to the [Version Description Table](./release_note.md#version-compatibility-matrix).
 
-## 快速安装
+## Quick Installation
 
 ```bash
 pip install triton-ascend --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 ```
 
-## 快速开始
+## Quick Start
 
-**运行tutorials中向量加法实例验证结果**
+**Run the vector addition example in tutorials to verify the results**
 
-向量加法实例：[01-vector-add.py](../../third_party/ascend/tutorials/01-vector-add.py)
-通过对比Triton算子与PyTorch原生计算的输出结果，证明昇腾NPU设备可正确调用Triton算子并保证计算精度。
+Vector addition example: [01-vector-add.py](../../third_party/ascend/tutorials/01-vector-add.py)
+By comparing the output of the Triton kernel with that of native PyTorch computation, it proves that the Ascend NPU device can correctly call the Triton kernel and ensure computational accuracy.
 
 ```bash
-# 设置CANN环境变量（以root用户默认安装路径`/usr/local/Ascend`为例）
+# Set CANN environment variables (taking the root user's default installation path `/usr/local/Ascend` as an example)
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
-# 拉取triton-ascend源码仓及用例
+# Clone the triton-ascend source repository and examples
 git clone https://github.com/triton-lang/triton-ascend.git
-# 运行tutorials实例
+# Run the tutorials example
 python3 ./triton-ascend/third_party/ascend/tutorials/01-vector-add.py
 ```
 
-观察到类似的输出即说明环境配置正确。
+If you observe similar output, the environment is configured correctly.
 
 ```shell
 tensor([0.8329, 1.0024, 1.3639,  ..., 1.0796, 1.0406, 1.5811], device='npu:0')
