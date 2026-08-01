@@ -68,6 +68,10 @@ from triton.backends.compiler import (
 )
 from triton.runtime.cache import _base32, get_dump_manager
 
+try:
+    from triton._C.libtriton import distributed
+except ImportError:
+    distributed = None
 
 # TODO: materialize the concrete min shape
 def min_dot_size(target: GPUTarget):
@@ -137,6 +141,8 @@ def make_ttir(mod, metadata, opt):
     # the same optimize pass for triton-ir as all other backends
     pm = ir.pass_manager(mod.context)
     pm.enable_debug()
+    if distributed is not None:
+        distributed.ascend_passes.ttgpuir.add_convert_triton_distributed_to_hivm(pm)
     passes.common.add_inliner(pm)
     passes.ttir.add_combine(pm)
     passes.common.add_canonicalizer(pm)
@@ -1265,6 +1271,8 @@ class AscendBackend(BaseBackend):
     def load_dialects(self, ctx):
         from triton._C.libtriton import buffer_ir
         from triton._C.libtriton.ascend import ir as ascend_ir
+        if distributed is not None:
+            distributed.ir.load_dialects(ctx)
         buffer_ir.load_dialects(ctx)
         ascend_ir.load_dialects(ctx)
         ascend.load_dialects(ctx)

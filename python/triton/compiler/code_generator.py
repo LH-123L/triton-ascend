@@ -28,6 +28,11 @@ from .._utils import find_paths_if, get_iterable_path, set_iterable_path, is_nam
 
 from .errors import (CompilationError, CompileTimeAssertionFailure, UnsupportedLanguageConstruct)
 
+try:
+    from .._C.libtriton import distributed
+except ImportError:
+    distributed = None
+
 # Central registry for all 'with' statement handlers
 WITH_DISPATCH = {}
 WITH_DISPATCH.update(ASCEND_WITH_DISPATCH)
@@ -310,6 +315,9 @@ class CodeGenerator(ast.NodeVisitor):
             from triton.experimental.gluon.language._semantic import GluonSemantic
             self.builder = gluon_ir.GluonOpBuilder(context)
             self.semantic = GluonSemantic(self.builder)
+        elif distributed is not None:
+            self.builder = distributed.ir.DistributedOpBuilder(context)
+
         else:
             from triton.language.semantic import TritonSemantic
             self.builder = ir.builder(context)

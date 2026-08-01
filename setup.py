@@ -52,6 +52,7 @@ triton_dir = os.path.dirname(os.path.abspath(__file__))
 os.environ.setdefault("TRITON_BUILD_WITH_CCACHE", "true")
 os.environ.setdefault("TRITON_BUILD_WITH_CLANG_LLD", "true")
 os.environ.setdefault("TRITON_BUILD_PROTON", "OFF")
+os.environ.setdefault("TRITON_BUILD_DISTRIBUTED", "OFF")
 os.environ.setdefault("TRITON_WHEEL_NAME", "triton-ascend")
 os.environ.setdefault("TRITON_APPEND_CMAKE_ARGS", "-DTRITON_BUILD_UT=OFF")
 
@@ -619,6 +620,9 @@ class CMakeBuild(build_ext):
         if check_env_flag("TRITON_BUILD_PROTON", "ON"):  # Default ON
             cmake_args += self.get_proton_cmake_args()
 
+        if check_env_flag("TRITON_BUILD_DISTRIBUTED", "ON"):
+            cmake_args += ["-DTRITON_BUILD_DISTRIBUTED=ON"]
+        
         if is_offline_build():
             # unit test builds fetch googletests from GitHub
             cmake_args += ["-DTRITON_BUILD_UT=OFF"]
@@ -675,6 +679,25 @@ class CMakeBuild(build_ext):
                     pass
             print(f"Copied triton-opt to {triton_opt_dst}")
 
+def is_git_repo():
+    """Return True if this file resides in a git repository"""
+    return (Path(triton_dir) / ".git").is_dir()
+
+
+def ensure_distributed_submodule():
+    if not check_env_flag("TRITON_BUILD_DISTRIBUTED", "ON"):
+        return
+    distributed_dir = Path(triton_dir) / "third_party" / "ascend" / "Triton-distributed-ascend"
+    if not (distributed_dir / "CMakeLists.txt").is_file() and is_git_repo():
+        subprocess.check_call([
+            "git", "submodule", "update", "--init", "--",
+            "third_party/ascend/Triton-distributed-ascend"
+        ], cwd=triton_dir)
+    if not (distributed_dir / "CMakeLists.txt").is_file():
+        raise RuntimeError(f"Triton-Distributed submodule is not initialized: {distributed_dir}")
+
+
+ensure_distributed_submodule()
 
 def download_and_copy_dependencies():
     nvidia_version_path = os.path.join(get_base_dir(), "cmake", "nvidia-toolchain-version.json")
@@ -813,6 +836,29 @@ def get_packages():
     if check_env_flag("TRITON_BUILD_PROTON", "ON"):  # Default ON
         yield "triton.profiler"
 
+    if check_env_flag("TRITON_BUILD_DISTRIBUTED", "ON"):
+        distributed_root = os.path.join(os.pardir, "third_party", "ascend", "Triton-distributed-ascend", "python")
+        distributed_pkg_root = os.path.join(distributed_root, "triton_dist")
+        if os.path.isdir(distributed_pkg_root):
+            # Walk the directory tree directly. find_packages() would try to
+            # import each subpackage's __init__.py and silently drop those
+            # whose top-level imports (torch, triton, vendor SHMEM bindings)
+            # fail in the build environment. We want *all* subpackages
+            # shipped, even ones that only become importable at runtime when
+            # the matching accelerator stack is installed.
+            #
+            # We also include directories that have *.py files but no
+            # __init__.py — these are implicit namespace packages (PEP 420)
+            # such as `triton_dist/language/extra/` which holds loose
+            # `language_extra.py`, `libshmem_device.py`, `utils.py` plus
+            # four backend subpackages. Without listing the namespace dir
+            # itself in `packages`, setuptools has no place to attach those
+            # loose .py files and silently drops them from the wheel.
+            for dirpath, _dirnames, filenames in os.walk(distributed_pkg_root):
+                if "__init__.py" in filenames or any(f.endswith(".py") for f in filenames):
+                    rel = os.path.relpath(dirpath, distributed_pkg_root).replace(os.sep, ".")
+                    yield "triton_dist" if rel == "." else f"triton_dist.{rel}"
+
 
 def add_link_to_backends(external_only):
     for backend in backends:
@@ -847,10 +893,23 @@ def add_link_to_proton():
     update_symlink(proton_install_dir, proton_dir)
 
 
+def add_link_to_distributed():
+    distributed_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), os.pardir, "third_party", "ascend", "Triton-distributed-ascend",
+                     "python", "triton_dist"))
+    distributed_install_dir = os.path.join(os.path.dirname(__file__), "triton_dist")
+    if os.path.islink(distributed_install_dir):
+        os.unlink(distributed_install_dir)
+    if os.path.exists(distributed_install_dir):
+        shutil.rmtree(distributed_install_dir)
+    os.symlink(distributed_dir, distributed_install_dir)
+
 def add_links(external_only):
     add_link_to_backends(external_only=external_only)
     if not external_only and check_env_flag("TRITON_BUILD_PROTON", "ON"):  # Default ON
         add_link_to_proton()
+    if check_env_flag("TRITON_BUILD_DISTRIBUTED", "ON"):
+        add_link_to_distributed()
 
 
 class plugin_bdist_wheel(bdist_wheel):
