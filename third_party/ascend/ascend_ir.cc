@@ -719,7 +719,7 @@ void init_ascend_ir(py::module &&m) {
                  mlir::hivm::FixpipePreReluModeAttr::get(ctx, pre_relu_mode);
              auto channel_split = BoolAttr::get(ctx, false);
              auto op = self.create<hivm::FixpipeOp>(
-                 mlir::TypeRange{}, src, dst, dma_mode_attr, dual_dst_mode_attr,
+                 mlir::TypeRange{}, src, dst, dma_mode_attr, dual_dst_mode_attr, nullptr,
                  pre_quant_mode_attr, pre_relu_mode_attr, channel_split);
            })
       .def("create_annotation_mark",

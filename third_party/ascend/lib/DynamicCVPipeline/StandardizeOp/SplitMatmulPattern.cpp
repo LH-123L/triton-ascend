@@ -58,10 +58,10 @@
 #include "DynamicCVPipeline/PlanComputeBlock/Common.h"
 #include "bishengir/Dialect/HIVM/IR/HIVMImpl.h"
 
-using namespace llvm;
 using namespace mlir;
 using namespace triton;
 using namespace CVSplit;
+using mlir::Value;
 
 static constexpr const char *DEBUG_TYPE = "SplitMatmul";
 #define LOG_DEBUG(...) LLVM_DEBUG(llvm::dbgs() << "\n[" << DEBUG_TYPE << "] " << __VA_ARGS__ << "\n")
@@ -69,6 +69,8 @@ static constexpr const char *DEBUG_TYPE = "SplitMatmul";
 constexpr llvm::StringLiteral kMatmulAtLeastOnceHint = "matmul_at_least_once";
 
 namespace {
+
+using mlir::Value;
 
 struct MatmulInputs {
     Value a;

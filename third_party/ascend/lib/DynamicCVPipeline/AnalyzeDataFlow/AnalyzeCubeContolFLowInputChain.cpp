@@ -52,6 +52,7 @@ using namespace llvm;
 using namespace mlir;
 using namespace triton;
 using namespace CVPipeline;
+using mlir::Value;
 
 namespace {
 
@@ -69,14 +70,14 @@ static bool isControlFlowOp(Operation *op)
     return llvm::isa<scf::SCFDialect>(op->getDialect());
 }
 
-static bool hasIncompatibleOpForCondition(Value val, llvm::DenseSet<Value> &visited);
+static bool hasIncompatibleOpForCondition(mlir::Value val, llvm::DenseSet<mlir::Value> &visited);
 
-static inline bool hasIncompatibleUpstream(ValueRange operands, llvm::DenseSet<Value> &visited)
+static inline bool hasIncompatibleUpstream(ValueRange operands, llvm::DenseSet<mlir::Value> &visited)
 {
-    return llvm::any_of(operands, [&](Value operand) { return hasIncompatibleOpForCondition(operand, visited); });
+    return llvm::any_of(operands, [&](mlir::Value operand) { return hasIncompatibleOpForCondition(operand, visited); });
 }
 
-static bool hasIncompatibleOpForCondition(Value val, llvm::DenseSet<Value> &visited)
+static bool hasIncompatibleOpForCondition(mlir::Value val, llvm::DenseSet<mlir::Value> &visited)
 {
     if (visited.contains(val)) {
         return false;
@@ -96,7 +97,7 @@ static bool hasIncompatibleOpForCondition(Value val, llvm::DenseSet<Value> &visi
 
 static bool checkControlFlowOpInputs(Operation *cfOp)
 {
-    llvm::SmallVector<Value> scalarOperands;
+    llvm::SmallVector<mlir::Value> scalarOperands;
     llvm::TypeSwitch<Operation *>(cfOp)
         .Case([&](scf::IfOp ifOp) { scalarOperands.push_back(ifOp.getCondition()); })
         .Case([&](scf::ForOp forOp) {
@@ -114,7 +115,7 @@ static bool checkControlFlowOpInputs(Operation *cfOp)
             scalarOperands.append(operands.begin(), operands.end());
         });
 
-    llvm::DenseSet<Value> visited;
+    llvm::DenseSet<mlir::Value> visited;
     return hasIncompatibleUpstream(scalarOperands, visited);
 }
 

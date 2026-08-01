@@ -27,6 +27,7 @@
 
 using namespace mlir;
 using namespace llvm;
+using mlir::Value;
 
 // Collect all nested ops within an operation's regions
 LogicalResult triton::collectAllNestedOps(Operation *op, llvm::DenseSet<Operation *> &regionOps)
@@ -90,7 +91,7 @@ static LogicalResult dfsTopologicalSort(
   inStack.insert(op);
 
   SmallVector<Operation *> deps;
-  for (Value operand : op->getOperands()) {
+  for (mlir::Value operand : op->getOperands()) {
     if (Operation *def = operand.getDefiningOp()) {
       if (ops.contains(def)) {
         deps.push_back(def);
