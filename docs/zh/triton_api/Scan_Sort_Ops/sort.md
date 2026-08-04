@@ -25,12 +25,13 @@ triton.language.sort(x, dim: constexpr | None = None, descending: constexpr = co
 
 #### 2.2.1 DataType 支持
 
-|        | int8 | int16 | int32 | uint8 | uint16 | uint32 | uint64 | int64 | fp16 | fp32 | fp64 | bf16 | bool |
-| ------ | ---- | ----- | ----- | ----- | ------ | ------ | ------ | ----- | ---- | ---- | ---- | ---- | ---- |
-| GPU    | √    | √     | √      | √     | ×     | ×      | ×      | √     | √    | √    | √    | √    | √    |
-| Ascend A2/A3 | √     | √      | ×     | ×     | ×     | ×      | ×      | ×     | √    | √    | ×    | √    | ×    |
+|              | int8 | int16 | int32 | uint8 | uint16 | uint32 | uint64 | int64 | fp16 | fp32 | fp64 | bf16 | bool |
+|--------------| ---- | ----- | ----- | ----- | ------ | ------ | ------ | ----- | ---- | ---- | ---- | ---- | ---- |
+| GPU          | √    | √     | √     | √     | ×     | ×      | ×      | √     | √    | √    | √    | √    | √    |
+| Ascend A2/A3 | √    | √     | ×     | ×     | ×     | ×      | ×      | ×     | √    | √    | ×    | √    | ×    |
+| Ascend A5    | √    | √     | √     | ×     | ×     | ×      | ×      | √     | √    | √    | ×    | √    | ×    |
 
-结论：Ascend 比 GPU 少了int32，uint8，int64，fp64，bool的支持。
+结论：Ascend A2/A3 比 GPU 少了int32，uint8，int64，fp64，bool的支持；Ascend A5 比 GPU 少了int32，uint8，int64，fp64，bool的支持。
 torch_npu支持u8。
 
 #### 2.2.2 Shape 支持

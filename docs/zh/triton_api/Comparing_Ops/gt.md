@@ -35,8 +35,9 @@ triton.language.semantic.greater_than(
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | GPU      | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ |
 | Ascend A2/A3 | √ | √ | √ | √ | × | × | × | √ | √ | √ | × | √ | √ |
+|  Ascend A5   | √ | √ | √ | √ | √ | √ | √ | √ | √ | √ | × | √ | √ |
 
-结论：Ascend 对比 GPU 缺失uint、fp64的支持能力。
+结论：Ascend 对比 GPU 缺失uint、fp64的支持能力；Ascend A5 对比 GPU 缺失fp64的支持能力。
 
 #### 2.2.2 Shape 支持
 

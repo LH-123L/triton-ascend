@@ -34,10 +34,12 @@ triton.language.dot_scaled(lhs, lhs_scale, lhs_format, rhs, rhs_scale, rhs_forma
 
 #### 2.2.1 DataType 支持
 
-|        |     fp4     |    fp8    |    bf16    |    fp16    |
-| ------------- | --------- | -------- | -------- | -------- |
-| GPU    | √    | √     | √     | √     |
+|              |     fp4     |    fp8    |    bf16    |    fp16    |
+|--------------| --------- | -------- | -------- | -------- |
+| GPU          | √    | √     | √     | √     |
 | Ascend A2/A3 | ×    | ×     | √     | √    |
+| Ascend A5    | ×    | ×     | √     | √    |
+
 
 结论：
 1、Ascend 对比 GPU 缺失fp4、fp8的支持能力（硬件限制）。

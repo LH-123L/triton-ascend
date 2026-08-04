@@ -26,12 +26,13 @@ triton.language.inline_asm_elementwise(asm, constraints, args, dtype, is_pure, p
 
 A3:
 
-| | int8 | int16 | int32 | uint8 | uint16 | uint32 | uint64 | int64 | fp16 | fp32 | fp64 | bf16 | bool |
-|------|-------|-------|-------|-------|--------|--------|--------|-------|------|------|------|------|------|
-| GPU | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+|              | int8 | int16 | int32 | uint8 | uint16 | uint32 | uint64 | int64 | fp16 | fp32 | fp64 | bf16 | bool |
+|--------------|-------|-------|-------|-------|--------|--------|--------|-------|------|------|------|------|------|
+| GPU          | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Ascend A2/A3 | ✓ | ✓ | ✓ | × | × | ×| × | ✓ |×|   ✓  | × | × | ×  |
+| Ascend A5    | ✓ | ✓ | ✓ | ✓ | ✓ | ✓| ✓ | ✓ |✓|   ✓  | × | ✓ | ✓  |
 
-Ascend 对比 GPU 的输入张量类型 缺失uint8、uint16、uint32、uint64、fp16、 fp64 、bf16 、bool的支持能力。
+Ascend A2/A3 对比 GPU 的输入张量类型 缺失uint8、uint16、uint32、uint64、fp16、 fp64 、bf16 、bool的支持能力；Ascend A5 对比 GPU 的输入张量类型 缺失fp64的支持能力。
 
 ### 2.3 使用方法
 

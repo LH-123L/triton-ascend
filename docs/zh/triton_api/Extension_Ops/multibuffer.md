@@ -33,6 +33,7 @@ triton.language.multibuffer(
 |        | int8 | int16 | int32 | uint8 | uint16 | uint32 | uint64 | int64 | fp16 | fp32 |  bf16 | bool |
 | ------ | ---- | ----- | ----- | ----- | ------ | ------ | ------ | ----- | ---- | ---- | ---- | ---- |
 | Ascend A2/A3 | √    | √     | √     | √     | √     | √       | √         |  √       | √    | √    |  √    | √    |
+| Ascend A5    | N/A  | N/A   | N/A   | N/A   | N/A   | N/A     | N/A  | N/A  | N/A  | N/A |  N/A  | N/A  |
 
 #### 2.2.2 Shape 支持
 
