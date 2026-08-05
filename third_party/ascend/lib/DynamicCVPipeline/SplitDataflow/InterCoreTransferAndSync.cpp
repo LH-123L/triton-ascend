@@ -891,55 +891,107 @@ Operation *InterCoreTransferAndSyncPass::insertCubeToVectorTransfer(OpBuilder &b
     return fixpipeOp;
 }
 
-TransferPipeConfig InterCoreTransferAndSyncPass::getTransferPipeConfig(Operation *transferOp)
-{
-    auto cubeCoreAttr = hivm::TCoreTypeAttr::get(module.getContext(), hivm::TCoreType::CUBE);
-    auto vecCoreAttr = hivm::TCoreTypeAttr::get(module.getContext(), hivm::TCoreType::VECTOR);
-    auto pipeFixAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_FIX);
-    auto pipeVAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_V);
-    auto pipeMte3Attr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_MTE3);
-    auto pipeMte1Attr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_MTE1);
-    auto pipeMAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_M);
-    auto pipeSAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_S);
-    TransferPipeConfig config;
-    if (isa<hivm::FixpipeOp>(transferOp)) {
-        config.forReadTPipe = pipeFixAttr;
-        config.forReadPipe = pipeVAttr;
-        config.forWriteTPipe = pipeVAttr;
-        config.forWritePipe = pipeFixAttr;
-        config.srcCoreAttr = cubeCoreAttr;
-        config.dstCoreAttr = vecCoreAttr;
-        config.srcCoreType = "CUBE";
-        config.dstCoreType = "VECTOR";
-    } else if (isa<hivm::CopyOp>(transferOp)) {
-        config.forReadTPipe = pipeMte3Attr;
-        config.forReadPipe = pipeMte1Attr;
-        config.forWriteTPipe = pipeMAttr;
-        config.forWritePipe = pipeMte3Attr;
-        config.srcCoreAttr = vecCoreAttr;
-        config.dstCoreAttr = cubeCoreAttr;
-        config.srcCoreType = "VECTOR";
-        config.dstCoreType = "CUBE";
-    } else if (isa<LLVM::StoreOp>(transferOp)) {
-        config.forReadTPipe = pipeVAttr;
-        config.forReadPipe = pipeFixAttr;
-        config.forWriteTPipe = pipeFixAttr;
-        config.forWritePipe = pipeVAttr;
-        config.srcCoreAttr = vecCoreAttr;
-        config.dstCoreAttr = cubeCoreAttr;
-        config.srcCoreType = "VECTOR";
-        config.dstCoreType = "CUBE";
+TransferPipeConfig
+InterCoreTransferAndSyncPass::getTransferPipeConfig(Operation *transferOp,
+                                                    bool isStoreDirectly) {
+  auto cubeCoreAttr =
+      hivm::TCoreTypeAttr::get(module.getContext(), hivm::TCoreType::CUBE);
+  auto vecCoreAttr =
+      hivm::TCoreTypeAttr::get(module.getContext(), hivm::TCoreType::VECTOR);
+  auto pipeFixAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_FIX);
+  auto pipeVAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_V);
+  auto pipeMte3Attr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_MTE3);
+  auto pipeMte1Attr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_MTE1);
+  auto pipeMAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_M);
+  auto pipeSAttr = PipeAttr::get(module.getContext(), hivm::PIPE::PIPE_S);
+  TransferPipeConfig config;
+  if (isa<hivm::FixpipeOp>(transferOp)) {
+    if (isStoreDirectly) {
+      config.forReadTPipe = pipeFixAttr;
+      config.forReadPipe = pipeMte3Attr;
+      config.forWriteTPipe = pipeMte3Attr;
+      config.forWritePipe = pipeFixAttr;
+      config.srcCoreAttr = cubeCoreAttr;
+      config.dstCoreAttr = vecCoreAttr;
+      config.srcCoreType = "CUBE";
+      config.dstCoreType = "VECTOR";
+    } else {
+      config.forReadTPipe = pipeFixAttr;
+      config.forReadPipe = pipeVAttr;
+      config.forWriteTPipe = pipeVAttr;
+      config.forWritePipe = pipeFixAttr;
+      config.srcCoreAttr = cubeCoreAttr;
+      config.dstCoreAttr = vecCoreAttr;
+      config.srcCoreType = "CUBE";
+      config.dstCoreType = "VECTOR";
     }
-    return config;
+  } else if (isa<hivm::CopyOp>(transferOp)) {
+    config.forReadTPipe = pipeMte3Attr;
+    config.forReadPipe = pipeMte1Attr;
+    config.forWriteTPipe = pipeMAttr;
+    config.forWritePipe = pipeMte3Attr;
+    config.srcCoreAttr = vecCoreAttr;
+    config.dstCoreAttr = cubeCoreAttr;
+    config.srcCoreType = "VECTOR";
+    config.dstCoreType = "CUBE";
+  } else if (isa<LLVM::StoreOp>(transferOp)) {
+    config.forReadTPipe = pipeVAttr;
+    config.forReadPipe = pipeFixAttr;
+    config.forWriteTPipe = pipeFixAttr;
+    config.forWritePipe = pipeVAttr;
+    config.srcCoreAttr = vecCoreAttr;
+    config.dstCoreAttr = cubeCoreAttr;
+    config.srcCoreType = "VECTOR";
+    config.dstCoreType = "CUBE";
+  }
+  return config;
 }
 
+
+// Check if a value fixpiped to ub is directly connected to a storage op
+// Skip ViewLikeOpInterface and ExtractSliceOp during traversal
+bool InterCoreTransferAndSyncPass::isStoreDirectlyInUserChain(
+    Value toTensorValue) {
+  // Traverse user chain starting from toTensorValue
+  llvm::SmallVector<Value> workList = {toTensorValue};
+  llvm::DenseSet<Value> visited;
+  bool hasStore = false;
+  while (!workList.empty()) {
+    Value currVal = workList.pop_back_val();
+    if (visited.count(currVal)) {
+      continue;
+    }
+    visited.insert(currVal);
+
+    for (Operation *user : currVal.getUsers()) {
+      // Check if user is a storage op
+      if (CVPipeline::isStoreLike(user)) {
+        hasStore = true;
+        continue;
+      }
+
+      // Check if user is in skip range
+      if (CVPipeline::isViewLike(user)) {
+        // Continue traversing through skip ops
+        for (Value result : user->getResults()) {
+          if (!visited.count(result)) {
+            workList.push_back(result);
+          }
+        }
+      } else {
+        return false;
+      }
+    }
+  }
+  return hasStore;
+}
 
 void InterCoreTransferAndSyncPass::insertInterCoreSync(
     OpBuilder &builder, Operation *transferOp,
     Operation *consumerStartOp, Operation *consumerEndOp,
     int flag, Location loc, int transferIndex,
     FlagIdReuseManager &flagIdReuseManager,
-    Operation *consumedDataOp)
+    Operation *consumedDataOp, bool isStoreDirectly)
 {
     LOG_DEBUG("Inserting inter-core synchronization for transferOp: " << *transferOp << "\n");
 
@@ -950,7 +1002,7 @@ void InterCoreTransferAndSyncPass::insertInterCoreSync(
 
     Operation *mainLoopOp = findMainLoopforTransfer(transferOp, consumerStartOp);
 
-    auto config = getTransferPipeConfig(transferOp);
+    auto config = getTransferPipeConfig(transferOp, isStoreDirectly);
 
     builder.setInsertionPointAfter(transferOp);
     auto setOpForRead = builder.create<SyncBlockSetOp>(loc, config.srcCoreAttr, config.forReadTPipe, config.forReadPipe, flagId);
@@ -1195,8 +1247,10 @@ LogicalResult InterCoreTransferAndSyncPass::handleCubeToVector(OpBuilder &builde
     auto [newProdStart, newProdEnd] = getBlockStartEnd(dep.producerBlockId, module); // C Block
     auto [newConsStart, newConsEnd] = getBlockStartEnd(dep.consumerBlockId, module); // V Block
     int flagId = flagManager.acquireId(newProdStart);
+
+    bool isStoreDirectly = isStoreDirectlyInUserChain(consumedDataOp->getResult(0));
     insertInterCoreSync(builder, transferOp, newConsStart, newConsEnd, flagId, loc, transferIndex, flagIdReuseManager,
-        consumedDataOp);
+        consumedDataOp, isStoreDirectly);
 
     transferIndex++;
     LOG_DEBUG("Inserted C->V transfer and sync: block " << dep.producerBlockId << " -> block " << dep.consumerBlockId <<

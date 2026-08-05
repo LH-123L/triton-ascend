@@ -4,10 +4,13 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/LogicalResult.h"
 
+#include "bishengir/Dialect/HIVM/IR/HIVM.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -138,6 +141,20 @@ bool isOnlyDirectlyUse(Operation *preOp, Operation *nextOp, const CVPipeline::Me
         return false;
     }
     return (*allusers.begin()) == nextOp;
+}
+
+bool isStoreLike(mlir::Operation *op) {
+  if (isa<bufferization::MaterializeInDestinationOp, hivm::StoreOp>(op)) {
+    return true;
+  }
+  return false;
+}
+
+bool isViewLike(mlir::Operation *op) {
+  if (isa<tensor::ExtractSliceOp, ViewLikeOpInterface>(op)) {
+    return true;
+  }
+  return false;
 }
 
 } // namespace CVPipeline

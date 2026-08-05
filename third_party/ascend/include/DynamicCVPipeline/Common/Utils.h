@@ -106,6 +106,9 @@ inline bool isCubeOp(Operation *op)
 
 bool isVectorOnlyOp(Operation *op);
 
+bool isStoreLike(Operation *op);
+bool isViewLike(Operation *op);
+
 } // namespace CVPipeline
 } // namespace mlir
 
