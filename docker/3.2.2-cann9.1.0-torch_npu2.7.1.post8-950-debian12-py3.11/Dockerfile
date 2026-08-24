@@ -96,13 +96,9 @@ RUN sed -i \
 RUN pip install --no-cache-dir --upgrade pip --index-url ${PIP_SOURCE}
 
 # 按架构生成下载地址并下载 CANN 安装包（--tries/--timeout 防大文件断流）
-RUN ARCH=$(case "${TARGETPLATFORM}" in \
-        "linux/amd64") echo "x86_64" ;; \
-        "linux/arm64") echo "aarch64" ;; \
-        *) echo "" ;; \
-    esac) \
+RUN ARCH=$(uname -m) \
     && test -n "${ARCH}" \
-        || { echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}"; exit 1; } \
+        || { echo "Unsupported ARCH: ${ARCH}"; exit 1; } \
     && echo "Building for ARCH=${ARCH}" \
     && \
     CANN_TOOLKIT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-toolkit_${CANN_VERSION}_linux-${ARCH}.run && \
@@ -135,14 +131,14 @@ RUN pip3 install --no-cache-dir \
         --index-url ${PIP_SOURCE}
 # cmake 已在上面 apt 安装，不再重复 pip 安装
 
-RUN case "${TARGETPLATFORM}" in \
-        "linux/amd64")  \
+RUN case "$(uname -m)" in \
+        "x86_64")  \
             echo "install torch-npu for the x86 architecture"; \
             pip3 install torch==2.7.1+cpu --index-url https://download.pytorch.org/whl/cpu;; \
-        "linux/arm64") \
+        "aarch64") \
             echo "install torch-npu for the arm architecture"; \
             pip3 install torch==2.7.1 --index-url ${PIP_SOURCE};; \
-        *) echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}" && exit 1 ;; \
+        *) echo "Unsupported ARCH: $(uname -m)" && exit 1 ;; \
     esac && \
     pip3 install torch-npu==2.7.1.post8 --index-url ${PIP_SOURCE} && \
     pip3 install triton-ascend==3.2.2 \
