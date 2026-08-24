@@ -6,7 +6,7 @@ FROM openeuler/openeuler:24.03 AS python-installer
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
 
 # Note: Switch yum repos to the Huawei Cloud mirror
-RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|g' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
     yum update -y && \
     yum install -y \
         gcc \
@@ -53,7 +53,7 @@ ARG PIP_SOURCE
 ARG TARGETPLATFORM
 
 # Note: Switch yum repos to the Huawei Cloud mirror
-RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|g' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
     yum update -y && \
     yum install -y \
         unzip \
@@ -120,7 +120,7 @@ RUN case "${TARGETPLATFORM}" in \
 FROM python-installer AS llvm-installer
 ARG PIP_SOURCE
 # Note: Switch yum repos to the Huawei Cloud mirror
-RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|g' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
     yum update -y && \
     yum install -y \
         gcc \
@@ -199,7 +199,7 @@ ENV CMAKE_PREFIX_PATH=${TOOLCHAIN_HOME}/tools/tikicpulib/lib/cmake:${ASCEND_TOOL
 SHELL [ "/bin/bash", "-c" ]
 
 # Note: Switch yum repos to the Huawei Cloud mirror
-RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|g' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
     yum update -y && \
     yum install -y \
         ca-certificates \
