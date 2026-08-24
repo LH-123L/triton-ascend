@@ -4,7 +4,7 @@ ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
 # 系统依赖 + Python 3.11.15 + LLVM 已预构建为基础镜像（见 docker/base/README.zh.md），
 # 本 Dockerfile 不再执行 apt/yum 联网步骤，也不编译 LLVM。
 # 基础镜像为多架构 manifest（标签不带架构后缀），Docker 按宿主机架构自动拉取。
-ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:ubuntu24.04-py3.11
+ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:debian12-py3.11
 
 # ==================== Stage 1: Python 环境（来自预构建基础镜像） ====================
 FROM ${BASE_IMAGE} AS python-installer
@@ -79,7 +79,7 @@ RUN case "$(uname -m)" in \
         --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 
 # ==================== Stage 3: 最终镜像 ====================
-FROM ${BASE_IMAGE} AS official-ubuntu
+FROM ${BASE_IMAGE} AS official-debian
 
 ARG PIP_SOURCE
 ARG TARGETPLATFORM=linux/amd64
