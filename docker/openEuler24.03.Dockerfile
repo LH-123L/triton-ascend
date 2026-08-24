@@ -13,9 +13,9 @@
 #   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 yum 步骤。
 # =====================================================================
 
-ARG APT_MIRROR=mirrors.ustc.edu.cn
-
 FROM openeuler/openeuler:24.03
+
+ARG APT_MIRROR=mirrors.ustc.edu.cn
 
 SHELL ["/bin/bash", "-c"]
 
