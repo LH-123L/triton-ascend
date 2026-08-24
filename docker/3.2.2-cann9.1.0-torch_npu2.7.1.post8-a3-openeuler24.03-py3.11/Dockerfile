@@ -320,13 +320,9 @@ COPY --chown=root:root docker/copyright.sh /etc/profile.d/copyright.sh
 
 # 用 /etc/profile.d 脚本替代往 ~/.bashrc 追加，所有用户登录自动生效
 # openEuler 还需把 g++ include 目录软链成 linux-gnu 命名
-RUN ARCH=$(case "${TARGETPLATFORM}" in \
-        "linux/amd64") echo "x86_64" ;; \
-        "linux/arm64") echo "aarch64" ;; \
-        *) echo "" ;; \
-    esac) \
+RUN ARCH=$(uname -m) \
     && test -n "${ARCH}" \
-        || { echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}"; exit 1; } \
+        || { echo "Unsupported ARCH: ${ARCH}"; exit 1; } \
     && ln -sf /usr/include/c++/12/${ARCH}-openEuler-linux /usr/include/c++/12/${ARCH}-linux-gnu \
     && printf 'source /usr/local/Ascend/ascend-toolkit/set_env.sh\nexport LLVM_INSTALL_PREFIX=/usr/local/llvm-install\nalias ll="ls -l"\nbash /etc/profile.d/copyright.sh\n' \
         > /etc/profile.d/ascend-env.sh \
