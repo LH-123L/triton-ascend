@@ -1,7 +1,7 @@
 ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
 
 # ==================== Stage 1: 编译安装 Python 3.11.15 ====================
-FROM debian:12 AS python-installer
+FROM openeuler/openeuler:24.03 AS python-installer
 
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
@@ -10,31 +10,34 @@ ENV PATH=/usr/local/python3.11.15/bin:${PATH}
 # pip 网络参数（被下游 cann/llvm 阶段继承）
 ENV PIP_DEFAULT_TIMEOUT=100 PIP_RETRIES=5
 
-# 换 apt 源 + 安装编译依赖（DEBIAN_FRONTEND 防止 tzdata 等交互弹窗）
+# 换 yum 源 + 安装编译依赖
 RUN sed -i \
-        -e "s|deb.debian.org|${APT_MIRROR}|g" \
-        -e "s|security\.debian\.org/debian-security|${APT_MIRROR}/debian-security|g" \
-        /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        apt-transport-https \
-        ca-certificates \
-        bash \
+        -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
+        -e "/^metalink=/s/^/#/" \
+        /etc/yum.repos.d/openEuler.repo \
+    && yum update -y \
+    && yum install -y \
+        gcc \
+        gcc-c++ \
+        make \
+        cmake \
         curl \
-        build-essential \
-        libssl-dev \
-        zlib1g-dev \
-        libncurses5-dev \
-        libbz2-dev \
-        libreadline-dev \
-        libsqlite3-dev \
-        libffi-dev \
-        libnss3-dev \
-        libgdbm-dev \
-        liblzma-dev \
-        libev-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /var/tmp/* /tmp/*
+        zlib-devel \
+        bzip2-devel \
+        openssl-devel \
+        ncurses-devel \
+        sqlite-devel \
+        readline-devel \
+        tk-devel \
+        gdbm-devel \
+        libpcap-devel \
+        xz-devel \
+        libev-devel \
+        expat-devel \
+        libffi-devel \
+        systemtap-sdt-devel \
+    && yum clean all \
+    && rm -rf /var/cache/yum /tmp/*
 
 # 下载 Python 源码：--retry 防断流；SHA256 校验示例见本 RUN 之后的注释
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
@@ -62,34 +65,27 @@ RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
 FROM python-installer AS cann-installer
 
 ARG PIP_SOURCE
-# CodeArts 传统构建器不会自动提供 TARGETPLATFORM（BuildKit 才会），这里给默认值
+# CodeArts 传统构建器不会自动提供 TARGETPLATFORM，改用 uname -m 按实际运行架构探测
 ARG TARGETPLATFORM=linux/amd64
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 ARG CANN_VERSION=9.1.0
 
-# libblas3 由 libblas-dev 依赖自动带入，不再单独安装
 RUN sed -i \
-        -e "s|deb.debian.org|${APT_MIRROR}|g" \
-        -e "s|security\.debian\.org/debian-security|${APT_MIRROR}/debian-security|g" \
-        /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        git \
-        wget \
-        gcc \
-        g++ \
-        make \
-        cmake \
-        zlib1g \
-        openssl \
+        -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
+        -e "/^metalink=/s/^/#/" \
+        /etc/yum.repos.d/openEuler.repo \
+    && yum update -y \
+    && yum install -y \
         unzip \
         pciutils \
         net-tools \
-        libblas-dev \
-        gfortran \
-        patchelf \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+        lapack-devel \
+        gcc-gfortran \
+        util-linux \
+        findutils \
+        wget \
+    && yum clean all \
+    && rm -rf /var/cache/yum
 
 # 升级 pip：传统构建器无法使用 --mount，此处用 --no-cache-dir 防镜像膨胀
 # 如需 pip 缓存加速，请使用 Dockerfile.buildkit（需 CI 开启 BuildKit/buildx）
@@ -129,7 +125,7 @@ RUN pip3 install --no-cache-dir \
         wheel \
         tabulate \
         --index-url ${PIP_SOURCE}
-# cmake 已在上面 apt 安装，不再重复 pip 安装
+# cmake 已在上面 yum 安装，不再重复 pip 安装
 
 RUN case "$(uname -m)" in \
         "x86_64")  \
@@ -150,40 +146,39 @@ FROM python-installer AS llvm-installer
 
 ARG PIP_SOURCE
 ARG APT_MIRROR=mirrors.ustc.edu.cn
-# CI 无法稳定访问 github.com，LLVM 源码改为走代理下载固定 commit 的 tar.gz
-# 代理失效时可在构建参数里覆盖：--build-arg LLVM_SRC_URL=<其他代理或 Gitee 镜像的 tarball 地址>
+# CI 无法稳定访问 github.com，LLVM 源码改为宿主机预下载后 COPY 进构建上下文
+# 地址可在构建参数里覆盖：--build-arg LLVM_SRC_URL=<其他代理或 Gitee 镜像的 tarball 地址>
 ARG LLVM_SRC_URL=https://ghproxy.com/https://github.com/llvm/llvm-project/archive/b5cc222d7429fe6f18c787f633d5262fac2e676f.tar.gz
 
 RUN sed -i \
-        -e "s|deb.debian.org|${APT_MIRROR}|g" \
-        -e "s|security\.debian\.org/debian-security|${APT_MIRROR}/debian-security|g" \
-        /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
+        -e "/^metalink=/s/^/#/" \
+        /etc/yum.repos.d/openEuler.repo \
+    && yum update -y \
+    && yum install -y \
         gcc \
         g++ \
         make \
         cmake \
         wget \
-        zlib1g-dev \
-        libzstd-dev \
-        clang-15 \
+        zlib-devel \
+        libzstd \
+        libzstd-devel \
+        clang \
         ccache \
-        lld-15 \
+        lld \
         git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /var/tmp/* /tmp/* \
-    && ln -s /usr/bin/clang-15 /usr/bin/clang \
-    && ln -s /usr/bin/clang++-15 /usr/bin/clang++
+    && yum clean all \
+    && rm -rf /var/cache/yum /tmp/*
 
 RUN pip3 install --no-cache-dir \
         ninja \
         wheel \
         pybind11 \
         --index-url ${PIP_SOURCE}
-# cmake 已 apt 安装，不再重复 pip 安装
+# cmake 已 yum 安装，不再重复 pip 安装
 
-# 直接下载固定 commit 的源码包，避免 git clone 依赖 github.com 连通性
+# 直接 COPY 宿主机预下载的固定 commit 源码包，避免 git clone 依赖 github.com 连通性
 # -DLLVM_CCACHE_BUILD=ON：启用已安装的 ccache，缓存写入镜像层 /root/.ccache
 # 若面向发布镜像，可把 LLVM_ENABLE_ASSERTIONS 改为 OFF 以提升运行性能
 COPY llvm-project.tar.gz /tmp/llvm-project.tar.gz
@@ -195,9 +190,9 @@ RUN tar -xzf /tmp/llvm-project.tar.gz -C /tmp \
     && export LLVM_INSTALL_PREFIX=/usr/local/llvm-install \
     && cmake ../llvm \
         -G Ninja \
-        -DCMAKE_C_COMPILER=/usr/bin/clang-15 \
-        -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 \
-        -DCMAKE_LINKER=/usr/bin/lld-15 \
+        -DCMAKE_C_COMPILER=/usr/bin/clang \
+        -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
+        -DCMAKE_LINKER=/usr/bin/lld \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLVM_ENABLE_ASSERTIONS=ON \
         -DLLVM_CCACHE_BUILD=ON \
@@ -211,7 +206,7 @@ RUN tar -xzf /tmp/llvm-project.tar.gz -C /tmp \
     && rm -rf /tmp/llvm-project /tmp/llvm-project.tar.gz
 
 # ==================== Stage 4: 最终镜像 ====================
-FROM debian:12 AS official-debian
+FROM openeuler/openeuler:24.03 AS official-openeuler
 
 ARG PIP_SOURCE
 ARG TARGETPLATFORM=linux/amd64
@@ -269,20 +264,19 @@ ENV CMAKE_PREFIX_PATH=${TOOLCHAIN_HOME}/tools/tikicpulib/lib/cmake:${ASCEND_TOOL
 
 SHELL [ "/bin/bash", "-c" ]
 
-# 若这是对外分发的运行时镜像，可考虑 debian:12-slim 并裁剪 vim/systemd/openssh 等开发工具
+# 若这是对外分发的运行时镜像，可考虑裁剪 vim/systemd/openssh 等开发工具
 RUN sed -i \
-        -e "s|deb.debian.org|${APT_MIRROR}|g" \
-        -e "s|security\.debian\.org/debian-security|${APT_MIRROR}/debian-security|g" \
-        /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        apt-transport-https \
+        -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
+        -e "/^metalink=/s/^/#/" \
+        /etc/yum.repos.d/openEuler.repo \
+    && yum update -y \
+    && yum install -y \
         ca-certificates \
         bash \
-        libc6 \
-        libsqlite3-dev \
+        glibc \
+        sqlite-devel \
         gcc \
-        g++ \
+        gcc-c++ \
         make \
         cmake \
         git \
@@ -290,14 +284,13 @@ RUN sed -i \
         wget \
         jq \
         curl \
-        build-essential \
-        libnuma-dev \
+        numactl-devel \
         sudo \
-        procps \
+        procps-ng \
         sysstat \
         systemd \
         net-tools \
-        iproute2 \
+        iproute \
         openssl \
         grep \
         tree \
@@ -306,20 +299,17 @@ RUN sed -i \
         zip \
         unzip \
         findutils \
-        python3-dev \
-        zlib1g-dev \
-        libzstd-dev \
-        clang-15 \
+        python3-devel \
+        zlib-devel \
+        libzstd \
+        libzstd-devel \
         ccache \
-        lld-15 \
-        openssh-server \
-        openssh-client \
-        libssl-dev \
+        clang \
+        lld \
+        openssl-devel \
         dos2unix \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /var/tmp/* /tmp/* \
-    && ln -s /usr/bin/clang-15 /usr/bin/clang \
-    && ln -s /usr/bin/clang++-15 /usr/bin/clang++
+    && yum clean all \
+    && rm -rf /var/cache/yum /tmp/*
 
 COPY --from=cann-installer /usr/local/python3.11.15 /usr/local/python3.11.15
 COPY --from=cann-installer /usr/local/Ascend /usr/local/Ascend
@@ -329,7 +319,12 @@ COPY --from=llvm-installer /usr/local/llvm-install /usr/local/llvm-install
 COPY --chown=root:root docker/copyright.sh /etc/profile.d/copyright.sh
 
 # 用 /etc/profile.d 脚本替代往 ~/.bashrc 追加，所有用户登录自动生效
-RUN printf 'source /usr/local/Ascend/ascend-toolkit/set_env.sh\nexport LLVM_INSTALL_PREFIX=/usr/local/llvm-install\nalias ll="ls -l"\nbash /etc/profile.d/copyright.sh\n' \
+# openEuler 还需把 g++ include 目录软链成 linux-gnu 命名
+RUN ARCH=$(uname -m) \
+    && test -n "${ARCH}" \
+        || { echo "Unsupported ARCH: ${ARCH}"; exit 1; } \
+    && ln -sf /usr/include/c++/12/${ARCH}-openEuler-linux /usr/include/c++/12/${ARCH}-linux-gnu \
+    && printf 'source /usr/local/Ascend/ascend-toolkit/set_env.sh\nexport LLVM_INSTALL_PREFIX=/usr/local/llvm-install\nalias ll="ls -l"\nbash /etc/profile.d/copyright.sh\n' \
         > /etc/profile.d/ascend-env.sh \
     && chmod 644 /etc/profile.d/ascend-env.sh \
     && chmod 555 /etc/profile.d/copyright.sh
