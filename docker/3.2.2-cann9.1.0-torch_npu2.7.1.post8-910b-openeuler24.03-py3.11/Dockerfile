@@ -1,4 +1,4 @@
-ARG PIP_SOURCE="https://repo.huaweicloud.com/repository/pypi/simple"
+ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
 # Stage 1: Install Python
 FROM openeuler/openeuler:24.03 AS python-installer
 
