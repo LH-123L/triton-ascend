@@ -1,13 +1,14 @@
-# Stage 0: init source
-ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
-
+# Stage 0: init source (Huawei Cloud mirror)
+ARG PIP_SOURCE="https://repo.huaweicloud.com/repository/pypi/simple"
 # Stage 1: Install Python
 FROM openeuler/openeuler:24.03 AS python-installer
 
 # Python Environment variables
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
 
-RUN yum update -y && \
+# Note: Switch yum repos to the Huawei Cloud mirror
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+    yum update -y && \
     yum install -y \
         gcc \
         gcc-c++ \
@@ -52,7 +53,9 @@ FROM python-installer AS cann-installer
 ARG PIP_SOURCE
 ARG TARGETPLATFORM
 
-RUN yum update -y && \
+# Note: Switch yum repos to the Huawei Cloud mirror
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+    yum update -y && \
     yum install -y \
         unzip \
         pciutils \
@@ -105,7 +108,7 @@ RUN pip3 install --no-cache-dir \
 RUN case "${TARGETPLATFORM}" in \
         "linux/amd64")  \
             echo "install torch-npu for the x86 architecture"; \
-            pip3 install --no-cache-dir torch==2.7.1+cpu --index-url https://download.pytorch.org/whl/cpu;; \
+            pip3 install --no-cache-dir torch==2.7.1+cpu --index-url https://mirrors.huaweicloud.com/pytorch/wheels/cpu;; \
         "linux/arm64") \
             echo "install torch-npu for the arm architecture"; \
             pip3 install --no-cache-dir torch==2.7.1 --index-url ${PIP_SOURCE};; \
@@ -117,7 +120,9 @@ RUN case "${TARGETPLATFORM}" in \
 # Stage 4: install llvm
 FROM python-installer AS llvm-installer
 ARG PIP_SOURCE
-RUN yum update -y && \
+# Note: Switch yum repos to the Huawei Cloud mirror
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+    yum update -y && \
     yum install -y \
         gcc \
         g++ \
@@ -141,17 +146,16 @@ RUN pip3 install --no-cache-dir \
     pybind11 \
     --index-url ${PIP_SOURCE}
 
-RUN \
-    git config --global http.postBuffer 524288000 && \
-    git config --global http.lowSpeedLimit 0 && \
-    git config --global http.lowSpeedTime 1800 && \
-    git clone --no-checkout https://github.com/llvm/llvm-project.git && \
-    cd llvm-project && \
-    git checkout b5cc222d7429fe6f18c787f633d5262fac2e676f && \
-    mkdir build && \
-    cd build && \
-    export LLVM_INSTALL_PREFIX=/usr/local/llvm-install && \
-    cmake ../llvm \
+# LLVM 源码包由宿主机预先下载并放在构建上下文根目录（构建前执行一次）：
+#   wget -O llvm-project.tar.gz https://github.com/llvm/llvm-project/archive/b5cc222d7429fe6f18c787f633d5262fac2e676f.tar.gz
+COPY llvm-project.tar.gz /tmp/llvm-project.tar.gz
+
+RUN tar -xzf /tmp/llvm-project.tar.gz -C /tmp \
+    && mv /tmp/llvm-project-* /tmp/llvm-project \
+    && mkdir -p /tmp/llvm-project/build \
+    && cd /tmp/llvm-project/build \
+    && export LLVM_INSTALL_PREFIX=/usr/local/llvm-install \
+    && cmake ../llvm \
       -G Ninja \
       -DCMAKE_C_COMPILER=/usr/bin/clang \
       -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
@@ -161,8 +165,8 @@ RUN \
       -DLLVM_ENABLE_PROJECTS="mlir;llvm;lld" \
       -DLLVM_TARGETS_TO_BUILD="host;NVPTX;AMDGPU" \
       -DLLVM_ENABLE_LLD=ON \
-      -DCMAKE_INSTALL_PREFIX=${LLVM_INSTALL_PREFIX} && \
-    ninja install
+      -DCMAKE_INSTALL_PREFIX=${LLVM_INSTALL_PREFIX} \
+    && ninja install
 
 # Stage 5: Copy results from previous stages
 FROM openeuler/openeuler:24.03 AS official-openeuler
@@ -195,7 +199,9 @@ ENV CMAKE_PREFIX_PATH=${TOOLCHAIN_HOME}/tools/tikicpulib/lib/cmake:${ASCEND_TOOL
 
 SHELL [ "/bin/bash", "-c" ]
 
-RUN yum update -y && \
+# Note: Switch yum repos to the Huawei Cloud mirror
+RUN sed -i -e 's|https\?://repo\.openeuler\.org/|https://mirrors.huaweicloud.com/openeuler/|' -e '/^metalink=/s/^/#/' /etc/yum.repos.d/openEuler.repo 2>/dev/null || true && \
+    yum update -y && \
     yum install -y \
         ca-certificates \
         bash \
