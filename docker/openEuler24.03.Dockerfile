@@ -24,6 +24,8 @@ ENV PATH=/usr/local/python3.11.15/bin:${PATH}
 ENV LD_LIBRARY_PATH=/usr/local/python3.11.15/lib:${LD_LIBRARY_PATH}
 ENV PIP_DEFAULT_TIMEOUT=100 PIP_RETRIES=5
 
+RUN echo "nameserver 114.114.114.114" > /etc/resolv.conf
+
 # 换 yum 源 + 安装全部依赖
 RUN sed -i \
         -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
