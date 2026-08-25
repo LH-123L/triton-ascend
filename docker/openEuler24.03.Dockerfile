@@ -15,7 +15,7 @@
 
 FROM openeuler/openeuler:24.03
 
-ARG APT_MIRROR=mirrors.ustc.edu.cn
+ARG APT_MIRROR=repo.huaweicloud.com
 
 SHELL ["/bin/bash", "-c"]
 
@@ -29,6 +29,7 @@ RUN sed -i \
         -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
         -e "/^metalink=/s/^/#/" \
         /etc/yum.repos.d/openEuler.repo \
+    && yum update -y \
     && yum install -y \
         ca-certificates \
         bash \
