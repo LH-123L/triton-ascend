@@ -15,7 +15,7 @@
 
 FROM hub.oepkgs.net/openeuler/openeuler:24.03
 
-ARG APT_MIRROR=repo.huaweicloud.com
+ARG APT_MIRROR=mirrors.ustc.edu.cn
 
 SHELL ["/bin/bash", "-c"]
 
