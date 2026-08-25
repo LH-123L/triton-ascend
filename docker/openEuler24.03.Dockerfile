@@ -1,93 +1,100 @@
 # =====================================================================
-# Triton-Ascend 基础镜像：openEuler 24.03 + 全部 yum 依赖 + Python 3.11.15
+# Triton-Ascend 基础镜像：Ubuntu 24.04 + 全部 apt 依赖 + Python 3.11.15
 #
 # 构建（在 Docker 正常的机器上执行；此处为单架构构建，推 SWR 时请用
 # docker/base/push-multiarch.sh 合并为不带架构后缀的多架构标签）：
 #   docker build --network host --security-opt seccomp=unconfined \
 #       --platform linux/arm64 \
-#       -f docker/base/openeuler24.03/Dockerfile \
-#       -t swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:openeuler24.03-py3.11-arm64 .
+#       -f docker/base/ubuntu24.04/Dockerfile \
+#       -t swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:ubuntu24.04-py3.11-arm64 .
 #
 # 说明：
-#   - 合并了 3.2.2 各镜像 Dockerfile 四个阶段（python/cann/llvm/final）的全部 yum 依赖；
+#   - 合并了 3.2.2 各镜像 Dockerfile 四个阶段（python/cann/llvm/final）的全部 apt 依赖；
 #   - Python 3.11.15 为源码编译产物，镜像按架构区分标签（arm64/amd64 不通用）；
-#   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 yum 步骤；
+#   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 apt 步骤；
 #   - SWR 上最终使用多架构标签（不带 -arm64/-amd64 后缀），Docker 按宿主机架构自动拉取。
 # =====================================================================
 
-FROM openeuler/openeuler:24.03
+FROM ubuntu:24.04
 
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
 SHELL ["/bin/bash", "-c"]
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Python 环境
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
 ENV LD_LIBRARY_PATH=/usr/local/python3.11.15/lib:${LD_LIBRARY_PATH}
 ENV PIP_DEFAULT_TIMEOUT=100 PIP_RETRIES=5
 
-# 换 yum 源 + 安装全部依赖
-RUN sed -i \
-        -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
-        -e "/^metalink=/s/^/#/" \
-        /etc/yum.repos.d/openEuler.repo \
-    && yum update -y \
-    && yum install -y \
+# 换 apt 源（含 arm64 的 ports.ubuntu.com）+ 安装全部依赖
+# 旧版 Docker 下先删 docker-clean，避免 APT::Update::Post-Invoke 报错
+# 注意：noble 已移除 libncurses5-dev，统一用 libncurses-dev
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && sed -i \
+        -e "s|archive\.ubuntu\.com|${APT_MIRROR}|g" \
+        -e "s|security\.ubuntu\.com|${APT_MIRROR}|g" \
+        -e "s|ports\.ubuntu\.com|${APT_MIRROR}|g" \
+        /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get install --no-install-recommends --no-install-suggests -y \
+        apt-transport-https \
         ca-certificates \
         bash \
-        glibc \
-        gcc \
-        gcc-c++ \
-        g++ \
-        make \
-        cmake \
         curl \
         wget \
         git \
         vim \
         jq \
-        zlib-devel \
-        bzip2-devel \
-        openssl-devel \
-        ncurses-devel \
-        sqlite-devel \
-        readline-devel \
-        tk-devel \
-        gdbm-devel \
-        libpcap-devel \
-        xz-devel \
-        libev-devel \
-        expat-devel \
-        libffi-devel \
-        systemtap-sdt-devel \
-        unzip \
+        build-essential \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        clang-15 \
+        ccache \
+        lld-15 \
+        zlib1g \
+        zlib1g-dev \
+        libssl-dev \
+        libncurses-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libffi-dev \
+        libnss3-dev \
+        libgdbm-dev \
+        liblzma-dev \
+        libev-dev \
+        libzstd-dev \
+        libnuma-dev \
+        libblas-dev \
+        gfortran \
+        patchelf \
         pciutils \
         net-tools \
-        lapack-devel \
-        gcc-gfortran \
-        util-linux \
-        findutils \
-        libzstd \
-        libzstd-devel \
-        clang \
-        ccache \
-        lld \
-        numactl-devel \
+        openssl \
+        unzip \
         sudo \
-        procps-ng \
+        procps \
         sysstat \
         systemd \
-        iproute \
-        openssl \
+        iproute2 \
         grep \
         tree \
         rsync \
         tar \
         zip \
-        python3-devel \
+        findutils \
+        python3-dev \
+        openssh-server \
+        openssh-client \
         dos2unix \
-    && yum clean all \
-    && rm -rf /var/cache/yum /tmp/*
+        libc6 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/tmp/* /tmp/* \
+    && ln -s /usr/bin/clang-15 /usr/bin/clang \
+    && ln -s /usr/bin/clang++-15 /usr/bin/clang++
 
 # ==================== clone3 兼容层（CodeArts 构建节点 seccomp 屏蔽 clone3） ====================
 # 构建节点的 Docker/runc seccomp 策略会把 clone3 以 EPERM 拦截，而 glibc >= 2.34 只在 clone3
@@ -175,9 +182,9 @@ RUN tar -xzf /tmp/llvm-project.tar.gz -C /tmp \
     && export LLVM_INSTALL_PREFIX=/usr/local/llvm-install \
     && cmake ../llvm \
         -G Ninja \
-        -DCMAKE_C_COMPILER=/usr/bin/clang \
-        -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
-        -DCMAKE_LINKER=/usr/bin/lld \
+        -DCMAKE_C_COMPILER=/usr/bin/clang-15 \
+        -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 \
+        -DCMAKE_LINKER=/usr/bin/lld-15 \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLVM_ENABLE_ASSERTIONS=ON \
         -DLLVM_CCACHE_BUILD=ON \
