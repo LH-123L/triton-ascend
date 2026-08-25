@@ -1,16 +1,18 @@
 # =====================================================================
 # Triton-Ascend 基础镜像：openEuler 24.03 + 全部 yum 依赖 + Python 3.11.15
 #
-# 构建（在 Docker 正常的机器上执行；CodeArts 构建机为 arm64）：
+# 构建（在 Docker 正常的机器上执行；此处为单架构构建，推 SWR 时请用
+# docker/base/push-multiarch.sh 合并为不带架构后缀的多架构标签）：
 #   docker build --network host --security-opt seccomp=unconfined \
 #       --platform linux/arm64 \
 #       -f docker/base/openeuler24.03/Dockerfile \
-#       -t <SWR地址>/triton-ascend-base:openeuler24.03-py3.11-arm64 .
+#       -t swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:openeuler24.03-py3.11-arm64 .
 #
 # 说明：
 #   - 合并了 3.2.2 各镜像 Dockerfile 四个阶段（python/cann/llvm/final）的全部 yum 依赖；
 #   - Python 3.11.15 为源码编译产物，镜像按架构区分标签（arm64/amd64 不通用）；
-#   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 yum 步骤。
+#   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 yum 步骤；
+#   - SWR 上最终使用多架构标签（不带 -arm64/-amd64 后缀），Docker 按宿主机架构自动拉取。
 # =====================================================================
 
 FROM openeuler/openeuler:24.03
@@ -87,7 +89,47 @@ RUN sed -i \
     && yum clean all \
     && rm -rf /var/cache/yum /tmp/*
 
-# 编译安装 Python 3.11.15（华为云源码，--retry 防断流）
+# ==================== clone3 兼容层（CodeArts 构建节点 seccomp 屏蔽 clone3） ====================
+# 构建节点的 Docker/runc seccomp 策略会把 clone3 以 EPERM 拦截，而 glibc >= 2.34 只在 clone3
+# 返回 ENOSYS 时才回退到旧 clone(2)。因此 curl 起线程失败（getaddrinfo() thread failed to
+# start）、GNU make 的 posix_spawn 失败（make: /bin/sh: Operation not permitted）。
+# 这里编译一个小工具，给后续所有 RUN 的进程额外叠加一层 seccomp，把 clone3 伪装成 ENOSYS，
+# 让 glibc 走 clone() 兼容路径（等价于新版 Docker 默认行为）。
+RUN gcc -O2 -o /usr/local/bin/clone3-workaround -x c - <<'EOF'
+#define _GNU_SOURCE
+#include <errno.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <stddef.h>
+#include <sys/prctl.h>
+#include <unistd.h>
+
+#ifndef SYS_clone3
+#define SYS_clone3 435
+#endif
+
+int main(int argc, char **argv) {
+    if (argc < 2) return 2;
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clone3, 0, 1),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (ENOSYS & SECCOMP_RET_DATA)),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+    };
+    struct sock_fprog prog = { (unsigned short)(sizeof(filter) / sizeof(filter[0])), filter };
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) return 3;
+    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) != 0) return 4;
+    execvp(argv[1], &argv[1]);
+    return 5;
+}
+EOF
+
+# 后续 RUN（Python 编译、pip、LLVM/ninja）统一走 clone3 垫片
+SHELL ["/usr/local/bin/clone3-workaround", "/bin/bash", "-c"]
+
+# 编译安装 Python 3.11.15（华为云源码）
+# 注意：CodeArts 构建容器内 curl 的线程化 DNS 解析会因 pthread_create 受限而报
+# "getaddrinfo() thread failed to start"（重试无效），因此改用 wget 下载。
 RUN wget --quiet --tries=5 --timeout=60 --waitretry=10 \
         https://repo.huaweicloud.com/python/3.11.15/Python-3.11.15.tgz \
         -O /tmp/Python-3.11.15.tgz \
