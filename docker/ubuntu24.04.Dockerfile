@@ -13,7 +13,7 @@
 #   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 apt 步骤。
 # =====================================================================
 
-FROM ubuntu:24.04
+FROM docker.m.daocloud.io/library/ubuntu:24.04
 
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
