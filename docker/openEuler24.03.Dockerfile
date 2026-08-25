@@ -1,145 +1,96 @@
 # =====================================================================
-# Triton-Ascend 基础镜像：Ubuntu 24.04 + 全部 apt 依赖 + Python 3.11.15
+# Triton-Ascend 基础镜像：openEuler 24.03 + 全部 yum 依赖 + Python 3.11.15
 #
-# 构建（在 Docker 正常的机器上执行；此处为单架构构建，推 SWR 时请用
-# docker/base/push-multiarch.sh 合并为不带架构后缀的多架构标签）：
+# 构建（在 Docker 正常的机器上执行；CodeArts 构建机为 arm64）：
 #   docker build --network host --security-opt seccomp=unconfined \
 #       --platform linux/arm64 \
-#       -f docker/base/ubuntu24.04/Dockerfile \
-#       -t swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:ubuntu24.04-py3.11-arm64 .
+#       -f docker/base/openeuler24.03/Dockerfile \
+#       -t <SWR地址>/triton-ascend-base:openeuler24.03-py3.11-arm64 .
 #
 # 说明：
-#   - 合并了 3.2.2 各镜像 Dockerfile 四个阶段（python/cann/llvm/final）的全部 apt 依赖；
+#   - 合并了 3.2.2 各镜像 Dockerfile 四个阶段（python/cann/llvm/final）的全部 yum 依赖；
 #   - Python 3.11.15 为源码编译产物，镜像按架构区分标签（arm64/amd64 不通用）；
-#   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 apt 步骤；
-#   - SWR 上最终使用多架构标签（不带 -arm64/-amd64 后缀），Docker 按宿主机架构自动拉取。
+#   - 9 个 3.2.2 变体 Dockerfile 均以本镜像为 FROM，不再执行任何 yum 步骤。
 # =====================================================================
 
-FROM ubuntu:24.04
+FROM openeuler/openeuler:24.03
 
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
 SHELL ["/bin/bash", "-c"]
-ENV DEBIAN_FRONTEND=noninteractive
 
 # Python 环境
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
 ENV LD_LIBRARY_PATH=/usr/local/python3.11.15/lib:${LD_LIBRARY_PATH}
 ENV PIP_DEFAULT_TIMEOUT=100 PIP_RETRIES=5
 
-# 换 apt 源（含 arm64 的 ports.ubuntu.com）+ 安装全部依赖
-# 旧版 Docker 下先删 docker-clean，避免 APT::Update::Post-Invoke 报错
-# 注意：noble 已移除 libncurses5-dev，统一用 libncurses-dev
-RUN rm -f /etc/apt/apt.conf.d/docker-clean \
-    && sed -i \
-        -e "s|archive\.ubuntu\.com|${APT_MIRROR}|g" \
-        -e "s|security\.ubuntu\.com|${APT_MIRROR}|g" \
-        -e "s|ports\.ubuntu\.com|${APT_MIRROR}|g" \
-        /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list \
-    && apt-get update \
-    && apt-get install --no-install-recommends --no-install-suggests -y \
-        apt-transport-https \
+# 换 yum 源 + 安装全部依赖
+RUN sed -i \
+        -e "s|https\?://repo\.openeuler\.org/|https://${APT_MIRROR}/openeuler/|g" \
+        -e "/^metalink=/s/^/#/" \
+        /etc/yum.repos.d/openEuler.repo \
+    && yum update -y \
+    && yum install -y \
         ca-certificates \
         bash \
+        glibc \
+        gcc \
+        gcc-c++ \
+        g++ \
+        make \
+        cmake \
         curl \
         wget \
         git \
         vim \
         jq \
-        build-essential \
-        gcc \
-        g++ \
-        make \
-        cmake \
-        clang-15 \
-        ccache \
-        lld-15 \
-        zlib1g \
-        zlib1g-dev \
-        libssl-dev \
-        libncurses-dev \
-        libbz2-dev \
-        libreadline-dev \
-        libsqlite3-dev \
-        libffi-dev \
-        libnss3-dev \
-        libgdbm-dev \
-        liblzma-dev \
-        libev-dev \
-        libzstd-dev \
-        libnuma-dev \
-        libblas-dev \
-        gfortran \
-        patchelf \
+        zlib-devel \
+        bzip2-devel \
+        openssl-devel \
+        ncurses-devel \
+        sqlite-devel \
+        readline-devel \
+        tk-devel \
+        gdbm-devel \
+        libpcap-devel \
+        xz-devel \
+        libev-devel \
+        expat-devel \
+        libffi-devel \
+        systemtap-sdt-devel \
+        unzip \
         pciutils \
         net-tools \
-        openssl \
-        unzip \
+        lapack-devel \
+        gcc-gfortran \
+        util-linux \
+        findutils \
+        libzstd \
+        libzstd-devel \
+        clang \
+        ccache \
+        lld \
+        numactl-devel \
         sudo \
-        procps \
+        procps-ng \
         sysstat \
         systemd \
-        iproute2 \
+        iproute \
+        openssl \
         grep \
         tree \
         rsync \
         tar \
         zip \
-        findutils \
-        python3-dev \
-        openssh-server \
-        openssh-client \
+        python3-devel \
         dos2unix \
-        libc6 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /var/tmp/* /tmp/* \
-    && ln -s /usr/bin/clang-15 /usr/bin/clang \
-    && ln -s /usr/bin/clang++-15 /usr/bin/clang++
+    && yum clean all \
+    && rm -rf /var/cache/yum /tmp/*
 
-# ==================== clone3 兼容层（CodeArts 构建节点 seccomp 屏蔽 clone3） ====================
-# 构建节点的 Docker/runc seccomp 策略会把 clone3 以 EPERM 拦截，而 glibc >= 2.34 只在 clone3
-# 返回 ENOSYS 时才回退到旧 clone(2)。因此 curl 起线程失败（getaddrinfo() thread failed to
-# start）、GNU make 的 posix_spawn 失败（make: /bin/sh: Operation not permitted）。
-# 这里编译一个小工具，给后续所有 RUN 的进程额外叠加一层 seccomp，把 clone3 伪装成 ENOSYS，
-# 让 glibc 走 clone() 兼容路径（等价于新版 Docker 默认行为）。
-RUN gcc -O2 -o /usr/local/bin/clone3-workaround -x c - <<'EOF'
-#define _GNU_SOURCE
-#include <errno.h>
-#include <linux/filter.h>
-#include <linux/seccomp.h>
-#include <stddef.h>
-#include <sys/prctl.h>
-#include <unistd.h>
-
-#ifndef SYS_clone3
-#define SYS_clone3 435
-#endif
-
-int main(int argc, char **argv) {
-    if (argc < 2) return 2;
-    struct sock_filter filter[] = {
-        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clone3, 0, 1),
-        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (ENOSYS & SECCOMP_RET_DATA)),
-        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
-    };
-    struct sock_fprog prog = { (unsigned short)(sizeof(filter) / sizeof(filter[0])), filter };
-    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) return 3;
-    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) != 0) return 4;
-    execvp(argv[1], &argv[1]);
-    return 5;
-}
-EOF
-
-# 后续 RUN（Python 编译、pip、LLVM/ninja）统一走 clone3 垫片
-SHELL ["/usr/local/bin/clone3-workaround", "/bin/bash", "-c"]
-
-# 编译安装 Python 3.11.15（华为云源码）
-# 注意：CodeArts 构建容器内 curl 的线程化 DNS 解析会因 pthread_create 受限而报
-# "getaddrinfo() thread failed to start"（重试无效），因此改用 wget 下载。
-RUN wget --quiet --tries=5 --timeout=60 --waitretry=10 \
+# 编译安装 Python 3.11.15（华为云源码，--retry 防断流）
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
         https://repo.huaweicloud.com/python/3.11.15/Python-3.11.15.tgz \
-        -O /tmp/Python-3.11.15.tgz \
+        -o /tmp/Python-3.11.15.tgz \
     && tar -xf /tmp/Python-3.11.15.tgz -C /tmp \
     && cd /tmp/Python-3.11.15 \
     && mkdir -p /usr/local/python3.11.15/lib \
@@ -182,9 +133,9 @@ RUN tar -xzf /tmp/llvm-project.tar.gz -C /tmp \
     && export LLVM_INSTALL_PREFIX=/usr/local/llvm-install \
     && cmake ../llvm \
         -G Ninja \
-        -DCMAKE_C_COMPILER=/usr/bin/clang-15 \
-        -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 \
-        -DCMAKE_LINKER=/usr/bin/lld-15 \
+        -DCMAKE_C_COMPILER=/usr/bin/clang \
+        -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
+        -DCMAKE_LINKER=/usr/bin/lld \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLVM_ENABLE_ASSERTIONS=ON \
         -DLLVM_CCACHE_BUILD=ON \
