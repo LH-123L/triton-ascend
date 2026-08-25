@@ -95,9 +95,9 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
     && ln -s /usr/bin/clang++-15 /usr/bin/clang++
 
 # 编译安装 Python 3.11.15（华为云源码，--retry 防断流）
-RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 \
+RUN wget --quiet --tries=5 --timeout=60 --waitretry=10 \
         https://repo.huaweicloud.com/python/3.11.15/Python-3.11.15.tgz \
-        -o /tmp/Python-3.11.15.tgz \
+        -O /tmp/Python-3.11.15.tgz \
     && tar -xf /tmp/Python-3.11.15.tgz -C /tmp \
     && cd /tmp/Python-3.11.15 \
     && mkdir -p /usr/local/python3.11.15/lib \
