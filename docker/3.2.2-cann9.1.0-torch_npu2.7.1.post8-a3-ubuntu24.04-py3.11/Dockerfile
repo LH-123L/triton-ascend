@@ -115,7 +115,7 @@ RUN case "${TARGETPLATFORM}" in \
         *) echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
     pip3 install --no-cache-dir torch-npu==2.7.1.post8 --index-url ${PIP_SOURCE} && \
-    pip3 install --no-cache-dir triton-ascend==3.2.2 --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
+    pip3 install --no-cache-dir triton-ascend==3.2.2 --index-url ${PIP_SOURCE} --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 
 # Stage 4: install llvm
 FROM python-installer AS llvm-installer
