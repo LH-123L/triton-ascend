@@ -71,8 +71,16 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # Note: Install CANN runtime dependencies
 RUN pip install --no-cache-dir --upgrade pip --index-url ${PIP_SOURCE}
 
-COPY cann/Ascend-cann-toolkit_9.1.0_linux-aarch64.run /root/Ascend-cann-toolkit.run
-COPY cann/Ascend-cann-A3-ops_9.1.0_linux-aarch64.run /root/Ascend-cann-ops.run
+# Note: Get the download link according to ARCH and download the installation package
+RUN ARCH=$(case "${TARGETPLATFORM}" in \
+        "linux/amd64") echo "x86_64" ;; \
+        "linux/arm64") echo "aarch64" ;; \
+        *) echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac) && \
+    CANN_TOOLKIT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%209.1.0/Ascend-cann-toolkit_9.1.0_linux-${ARCH}.run && \
+    CANN_OPS_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%209.1.0/Ascend-cann-A3-ops_9.1.0_linux-${ARCH}.run && \
+    wget --quiet --header="Referer: https://www.hiascend.com/" ${CANN_TOOLKIT_URL} -O ~/Ascend-cann-toolkit.run && \
+    wget --quiet --header="Referer: https://www.hiascend.com/" ${CANN_OPS_URL} -O ~/Ascend-cann-ops.run
 
 # Note: Install CANN Toolkit Development Kit Package
 RUN chmod +x ~/Ascend-cann-toolkit.run && \
