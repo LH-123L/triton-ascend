@@ -108,7 +108,7 @@ RUN pip3 install --no-cache-dir \
 RUN case "${TARGETPLATFORM}" in \
         "linux/amd64")  \
             echo "install torch-npu for the x86 architecture"; \
-            pip3 install --no-cache-dir torch==2.7.1+cpu --index-url https://download.pytorch.org/whl/cpu;; \
+            pip3 install --no-cache-dir torch==2.7.1+cpu --index-url https://mirrors.cloud.tencent.com/pytorch-wheels/whl/cpu/;; \
         "linux/arm64") \
             echo "install torch-npu for the arm architecture"; \
             pip3 install --no-cache-dir torch==2.7.1 --index-url ${PIP_SOURCE};; \
@@ -150,7 +150,7 @@ RUN \
     git config --global http.postBuffer 524288000 && \
     git config --global http.lowSpeedLimit 0 && \
     git config --global http.lowSpeedTime 1800 && \
-    git clone --no-checkout https://github.com/llvm/llvm-project.git && \
+    git clone --no-checkout https://gitee.com/mirrors/llvm-project.git && \
     cd llvm-project && \
     git checkout b5cc222d7429fe6f18c787f633d5262fac2e676f && \
     mkdir build && \
@@ -170,7 +170,7 @@ RUN \
     ninja install
 
 # Stage 5: Copy results from previous stages
-FROM ubuntu:24.04 AS official-ubuntu
+FROM docker.m.daocloud.io/library/ubuntu:24.04 AS official-ubuntu
 
 ARG PIP_SOURCE
 ARG TARGETPLATFORM
