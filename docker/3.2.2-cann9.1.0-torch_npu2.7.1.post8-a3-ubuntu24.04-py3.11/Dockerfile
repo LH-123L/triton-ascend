@@ -2,7 +2,7 @@
 ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
 
 # Stage 1: Install Python
-FROM ubuntu:24.04 AS python-installer
+FROM docker.m.daocloud.io/library/ubuntu:24.04 AS python-installer
 
 # Python Environment variables
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
