@@ -1,133 +1,198 @@
+# Stage 0: init source
 ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
 
-# ==================== 预构建基础镜像 ====================
-# 系统依赖 + Python 3.11.15 + LLVM 已预构建为基础镜像（见 docker/base/README.zh.md），
-# 本 Dockerfile 不再执行 apt/yum 联网步骤，也不编译 LLVM。
-# 基础镜像为多架构 manifest（标签不带架构后缀），Docker 按宿主机架构自动拉取。
-ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/opentile/triton-ascend-base:ubuntu24.04-py3.11
-
-# ==================== Stage 1: Python 环境（来自预构建基础镜像） ====================
-FROM ${BASE_IMAGE} AS python-installer
-
-ARG PIP_SOURCE
+# Stage 1: Install Python
+FROM docker.m.daocloud.io/library/ubuntu:24.04 AS python-installer
 
 # Python Environment variables
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
-# pip 网络参数（被下游 cann/llvm 阶段继承）
-ENV PIP_DEFAULT_TIMEOUT=100 PIP_RETRIES=5
 
-# ==================== Stage 2: 安装 CANN（含 torch_npu / triton-ascend） ====================
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        apt-transport-https \
+        ca-certificates \
+        bash \
+        curl \
+        build-essential \
+        libssl-dev \
+        zlib1g-dev \
+        libncurses5-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libffi-dev \
+        libnss3-dev \
+        libgdbm-dev \
+        liblzma-dev \
+        libev-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/tmp/* \
+    && rm -rf /tmp/*
+
+# Install Python
+RUN curl -fsSL https://repo.huaweicloud.com/python/3.11.15/Python-3.11.15.tgz -o /tmp/Python-3.11.15.tgz && \
+    tar -xf /tmp/Python-3.11.15.tgz -C /tmp && \
+    cd /tmp/Python-3.11.15 && \
+    mkdir -p /usr/local/python3.11.15/lib && \
+    ./configure --enable-shared --enable-shared LDFLAGS="-Wl,-rpath /usr/local/python3.11.15/lib" --prefix=/usr/local/python3.11.15 && \
+    make -j $(nproc) && \
+    make altinstall && \
+    ln -sf /usr/local/python3.11.15/bin/python3.11 /usr/local/python3.11.15/bin/python3 && \
+    ln -sf /usr/local/python3.11.15/bin/pip3.11 /usr/local/python3.11.15/bin/pip3 && \
+    ln -sf /usr/local/python3.11.15/bin/python3 /usr/local/python3.11.15/bin/python && \
+    ln -sf /usr/local/python3.11.15/bin/pip3 /usr/local/python3.11.15/bin/pip && \
+    rm -rf /tmp/*
+
+# Stage 2: Install CANN
 FROM python-installer AS cann-installer
 
 ARG PIP_SOURCE
-# CodeArts 传统构建器不会自动提供 TARGETPLATFORM，改用 uname -m 按实际运行架构探测
-ARG TARGETPLATFORM=linux/amd64
-ARG CANN_VERSION=9.1.0
+ARG TARGETPLATFORM
 
-# 升级 pip：传统构建器无法使用 --mount，此处用 --no-cache-dir 防镜像膨胀
-# 如需 pip 缓存加速，请使用 Dockerfile.buildkit（需 CI 开启 BuildKit/buildx）
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        git \
+        wget \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        zlib1g \
+        openssl \
+        unzip \
+        pciutils \
+        net-tools \
+        libblas-dev \
+        gfortran \
+        patchelf \
+        libblas3 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Note: Install CANN runtime dependencies
 RUN pip install --no-cache-dir --upgrade pip --index-url ${PIP_SOURCE}
 
-# 按架构生成下载地址并下载 CANN 安装包（--tries/--timeout 防大文件断流）
-RUN ARCH=$(uname -m) \
-    && test -n "${ARCH}" \
-        || { echo "Unsupported ARCH: ${ARCH}"; exit 1; } \
-    && echo "Building for ARCH=${ARCH}" \
-    && \
-    CANN_TOOLKIT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-toolkit_${CANN_VERSION}_linux-${ARCH}.run && \
-    CANN_OPS_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${CANN_VERSION}/Ascend-cann-910b-ops_${CANN_VERSION}_linux-${ARCH}.run && \
-    wget --quiet --tries=5 --timeout=60 --waitretry=10 \
-        --header="Referer: https://www.hiascend.com/" \
-        ${CANN_TOOLKIT_URL} -O ~/Ascend-cann-toolkit.run && \
-    wget --quiet --tries=5 --timeout=60 --waitretry=10 \
-        --header="Referer: https://www.hiascend.com/" \
-        ${CANN_OPS_URL} -O ~/Ascend-cann-ops.run
-# 可选：从华为官方渠道获取 SHA256 后，用 sha256sum -c 校验两个 .run 文件
+# Note: Get the download link according to ARCH and download the installation package
+RUN ARCH=$(case "${TARGETPLATFORM}" in \
+        "linux/amd64") echo "x86_64" ;; \
+        "linux/arm64") echo "aarch64" ;; \
+        *) echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac) && \
+    CANN_TOOLKIT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%209.1.0/Ascend-cann-toolkit_9.1.0_linux-${ARCH}.run && \
+    CANN_OPS_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%209.1.0/Ascend-cann-910b-ops_9.1.0_linux-${ARCH}.run && \
+    wget --quiet --header="Referer: https://www.hiascend.com/" ${CANN_TOOLKIT_URL} -O ~/Ascend-cann-toolkit.run && \
+    wget --quiet --header="Referer: https://www.hiascend.com/" ${CANN_OPS_URL} -O ~/Ascend-cann-ops.run
 
-# 安装 CANN Toolkit 与 Ops 包（合并成一层，装完即删安装包）
-RUN chmod +x ~/Ascend-cann-toolkit.run \
-    && ~/Ascend-cann-toolkit.run --quiet --install --install-for-all \
-    && rm -f ~/Ascend-cann-toolkit.run \
-    && chmod +x ~/Ascend-cann-ops.run \
-    && ~/Ascend-cann-ops.run --quiet --install --install-for-all \
-    && rm -f ~/Ascend-cann-ops.run
+# Note: Install CANN Toolkit Development Kit Package
+RUN chmod +x ~/Ascend-cann-toolkit.run && \
+    ~/Ascend-cann-toolkit.run --quiet --install --install-for-all && \
+    rm -f ~/Ascend-cann-toolkit.run
 
-# Note: 安装 torch_npu 与 triton-ascend
-# 注意：这里没有新的 FROM，属于 cann-installer 阶段，最终镜像才能通过 COPY 带走
+# Note: Install CANN Ops Operator Package
+RUN chmod +x ~/Ascend-cann-ops.run && \
+    ~/Ascend-cann-ops.run --quiet --install --install-for-all && \
+    rm -f ~/Ascend-cann-ops.run
+
+# Stage 3: Install torch_npu and triton-ascend
+# Note: Install triton runtime dependencies
 RUN pip3 install --no-cache-dir \
-        pyyaml \
-        setuptools \
-        pybind11 \
-        ninja \
-        wheel \
-        tabulate \
-        --index-url ${PIP_SOURCE}
-# cmake 已在基础镜像中安装，不再重复 pip 安装
+    pyyaml \
+    setuptools \
+    pybind11 \
+    ninja \
+    cmake \
+    wheel \
+    tabulate \
+    --index-url ${PIP_SOURCE}
 
-RUN case "$(uname -m)" in \
-        "x86_64")  \
+# Note: Install torch_npu and triton-ascend
+RUN case "${TARGETPLATFORM}" in \
+        "linux/amd64")  \
             echo "install torch-npu for the x86 architecture"; \
-            pip3 install torch==2.7.1+cpu --index-url https://download.pytorch.org/whl/cpu;; \
-        "aarch64") \
+            pip3 install --no-cache-dir torch==2.7.1+cpu --index-url https://mirrors.cloud.tencent.com/pytorch-wheels/whl/cpu/;; \
+        "linux/arm64") \
             echo "install torch-npu for the arm architecture"; \
-            pip3 install torch==2.7.1 --index-url ${PIP_SOURCE};; \
-        *) echo "Unsupported ARCH: $(uname -m)" && exit 1 ;; \
+            pip3 install --no-cache-dir torch==2.7.1 --index-url ${PIP_SOURCE};; \
+        *) echo "Unsupported TARGETPLATFORM: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    pip3 install torch-npu==2.7.1.post8 --index-url ${PIP_SOURCE} && \
-    pip3 install triton-ascend==3.2.2 \
-        --index-url ${PIP_SOURCE} \
-        --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
+    pip3 install --no-cache-dir torch-npu==2.7.1.post8 --index-url ${PIP_SOURCE} && \
+    pip3 install --no-cache-dir triton-ascend==3.2.2 --index-url ${PIP_SOURCE} --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 
-# ==================== Stage 3: 最终镜像 ====================
-FROM ${BASE_IMAGE} AS official-ubuntu
+# Stage 4: install llvm
+FROM python-installer AS llvm-installer
+ARG PIP_SOURCE
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        zlib1g-dev \
+        libzstd-dev \
+        clang-15  \
+        ccache \
+        lld-15 \
+        git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/tmp/* \
+    && rm -rf /tmp/* \
+    && ln -s /usr/bin/clang-15 /usr/bin/clang \
+    && ln -s /usr/bin/clang++-15 /usr/bin/clang++
+
+RUN pip3 install --no-cache-dir \
+    ninja \
+    cmake \
+    wheel \
+    pybind11 \
+    --index-url ${PIP_SOURCE}
+
+RUN \
+    git config --global http.postBuffer 524288000 && \
+    git config --global http.lowSpeedLimit 0 && \
+    git config --global http.lowSpeedTime 1800 && \
+    git clone --no-checkout https://gitee.com/mirrors/llvm-project.git && \
+    cd llvm-project && \
+    git checkout b5cc222d7429fe6f18c787f633d5262fac2e676f && \
+    mkdir build && \
+    cd build && \
+    export LLVM_INSTALL_PREFIX=/usr/local/llvm-install && \
+    cmake ../llvm \
+      -G Ninja \
+      -DCMAKE_C_COMPILER=/usr/bin/clang-15 \
+      -DCMAKE_CXX_COMPILER=/usr/bin/clang++-15 \
+      -DCMAKE_LINKER=/usr/bin/lld-15 \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DLLVM_ENABLE_ASSERTIONS=ON \
+      -DLLVM_ENABLE_PROJECTS="mlir;llvm;lld" \
+      -DLLVM_TARGETS_TO_BUILD="host;NVPTX;AMDGPU" \
+      -DLLVM_ENABLE_LLD=ON \
+      -DCMAKE_INSTALL_PREFIX=${LLVM_INSTALL_PREFIX} && \
+    ninja install
+
+# Stage 5: Copy results from previous stages
+FROM docker.m.daocloud.io/library/ubuntu:24.04 AS official-ubuntu
 
 ARG PIP_SOURCE
-ARG TARGETPLATFORM=linux/amd64
-
+ARG TARGETPLATFORM
 # Python Environment variables
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/python3.11.15/lib:${LD_LIBRARY_PATH}
 
-# Toolkit Environment variables（来自 /usr/local/Ascend/ascend-toolkit/set_env.sh，已合并为少量 ENV）
+# Note: Toolkit Environment variables, obtained from /usr/local/Ascend/ascend-toolkit/set_env.sh
 ENV ASCEND_TOOLKIT_HOME=/usr/local/Ascend/cann-9.1.0
 ENV ASCEND_TOOLKIT_LATEST_HOME=/usr/local/Ascend/ascend-toolkit/latest
-
-ENV LD_LIBRARY_PATH=\
-${ASCEND_TOOLKIT_HOME}/devlib:\
-${ASCEND_TOOLKIT_LATEST_HOME}/tools/aml/lib64:\
-${ASCEND_TOOLKIT_LATEST_HOME}/tools/aml/lib64/plugin:\
-${ASCEND_TOOLKIT_LATEST_HOME}/lib64:\
-${ASCEND_TOOLKIT_LATEST_HOME}/lib64/plugin/opskernel:\
-${ASCEND_TOOLKIT_LATEST_HOME}/lib64/plugin/nnengine:\
-${ASCEND_TOOLKIT_LATEST_HOME}/opp/built-in/op_impl/ai_core/tbe/op_tiling:\
-${ASCEND_TOOLKIT_HOME}/tools/aml/lib64:\
-${ASCEND_TOOLKIT_HOME}/tools/aml/lib64/plugin:\
-${ASCEND_TOOLKIT_HOME}/lib64:\
-${ASCEND_TOOLKIT_HOME}/lib64/plugin/opskernel:\
-${ASCEND_TOOLKIT_HOME}/lib64/plugin/nnengine:\
-${ASCEND_TOOLKIT_HOME}/opp/built-in/op_impl/ai_core/tbe/op_tiling:\
-/usr/local/Ascend/driver/lib64:\
-/usr/local/Ascend/driver/lib64/common:\
-/usr/local/Ascend/driver/lib64/driver:\
-/usr/local/python3.11.15/lib:${LD_LIBRARY_PATH}
-
-ENV PYTHONPATH=\
-${ASCEND_TOOLKIT_LATEST_HOME}/python/site-packages:\
-${ASCEND_TOOLKIT_LATEST_HOME}/opp/built-in/op_impl/ai_core/tbe:\
-${ASCEND_TOOLKIT_HOME}/python/site-packages:\
-${ASCEND_TOOLKIT_HOME}/opp/built-in/op_impl/ai_core/tbe:${PYTHONPATH}
-
-ENV PATH=\
-/usr/local/python3.11.15/bin:\
-${ASCEND_TOOLKIT_LATEST_HOME}/bin:\
-${ASCEND_TOOLKIT_LATEST_HOME}/compiler/ccec_compiler/bin:\
-${ASCEND_TOOLKIT_LATEST_HOME}/tools/ccec_compiler/bin:\
-${ASCEND_TOOLKIT_HOME}/tools/show_kernel_debug_data:\
-${ASCEND_TOOLKIT_HOME}/tools/msobjdump:\
-${ASCEND_TOOLKIT_HOME}/bin:\
-${ASCEND_TOOLKIT_HOME}/tools/ccec_compiler/bin:\
-${ASCEND_TOOLKIT_HOME}/tools/profiler/bin:\
-${ASCEND_TOOLKIT_HOME}/tools/ascend_system_advisor/asys:${PATH}
-
+ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common/:/usr/local/Ascend/driver/lib64/driver/:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/lib64:${ASCEND_TOOLKIT_HOME}/lib64/plugin/opskernel:${ASCEND_TOOLKIT_HOME}/lib64/plugin/nnengine:${ASCEND_TOOLKIT_HOME}/opp/built-in/op_impl/ai_core/tbe/op_tiling:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/tools/aml/lib64:${ASCEND_TOOLKIT_HOME}/tools/aml/lib64/plugin:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=${ASCEND_TOOLKIT_LATEST_HOME}/lib64:${ASCEND_TOOLKIT_LATEST_HOME}/lib64/plugin/opskernel:${ASCEND_TOOLKIT_LATEST_HOME}/lib64/plugin/nnengine:${ASCEND_TOOLKIT_LATEST_HOME}/opp/built-in/op_impl/ai_core/tbe/op_tiling:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=${ASCEND_TOOLKIT_LATEST_HOME}/tools/aml/lib64:${ASCEND_TOOLKIT_LATEST_HOME}/tools/aml/lib64/plugin:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=${ASCEND_TOOLKIT_HOME}/devlib:$LD_LIBRARY_PATH
+ENV PYTHONPATH=${ASCEND_TOOLKIT_HOME}/python/site-packages:${ASCEND_TOOLKIT_HOME}/opp/built-in/op_impl/ai_core/tbe:$PYTHONPATH
+ENV PYTHONPATH=${ASCEND_TOOLKIT_LATEST_HOME}/python/site-packages:${ASCEND_TOOLKIT_LATEST_HOME}/opp/built-in/op_impl/ai_core/tbe:$PYTHONPATH
+ENV PATH=${ASCEND_TOOLKIT_HOME}/bin:${ASCEND_TOOLKIT_HOME}/tools/ccec_compiler/bin:${ASCEND_TOOLKIT_HOME}/tools/profiler/bin:${ASCEND_TOOLKIT_HOME}/tools/ascend_system_advisor/asys:$PATH
+ENV PATH=${ASCEND_TOOLKIT_HOME}/tools/show_kernel_debug_data:${ASCEND_TOOLKIT_HOME}/tools/msobjdump:$PATH
+ENV PATH=${ASCEND_TOOLKIT_LATEST_HOME}/bin:${ASCEND_TOOLKIT_LATEST_HOME}/compiler/ccec_compiler/bin:${ASCEND_TOOLKIT_LATEST_HOME}/tools/ccec_compiler/bin:$PATH
 ENV ASCEND_AICPU_PATH=${ASCEND_TOOLKIT_HOME}
 ENV ASCEND_OPP_PATH=${ASCEND_TOOLKIT_HOME}/opp
 ENV TOOLCHAIN_HOME=${ASCEND_TOOLKIT_HOME}/toolkit
@@ -136,19 +201,71 @@ ENV CMAKE_PREFIX_PATH=${TOOLCHAIN_HOME}/tools/tikicpulib/lib/cmake:${ASCEND_TOOL
 
 SHELL [ "/bin/bash", "-c" ]
 
-# 若这是对外分发的运行时镜像，可考虑 debian:12-slim 并裁剪 vim/systemd/openssh 等开发工具
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        apt-transport-https \
+        ca-certificates \
+        bash \
+        libc6 \
+        libsqlite3-dev \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        git \
+        vim \
+        wget \
+        jq \
+        curl \
+        build-essential \
+        libnuma-dev \
+        sudo \
+        procps \
+        sysstat \
+        systemd \
+        net-tools \
+        iproute2 \
+        openssl \
+        grep \
+        tree \
+        rsync \
+        tar \
+        zip \
+        unzip \
+        findutils \
+        python3-dev \
+        zlib1g-dev \
+        libzstd-dev \
+        clang-15  \
+        ccache \
+        lld-15 \
+        openssh-server \
+        openssh-client \
+        libssl-dev \
+        dos2unix \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/tmp/* \
+    && rm -rf /tmp/* \
+    && ln -s /usr/bin/clang-15 /usr/bin/clang \
+    && ln -s /usr/bin/clang++-15 /usr/bin/clang++
 
 COPY --from=cann-installer /usr/local/python3.11.15 /usr/local/python3.11.15
 COPY --from=cann-installer /usr/local/Ascend /usr/local/Ascend
 COPY --from=cann-installer /etc/Ascend /etc/Ascend
-# 注意：docker/copyright.sh 必须在构建上下文里存在，否则本步骤报错
+COPY --from=llvm-installer /usr/local/llvm-install /usr/local/llvm-install
 COPY --chown=root:root docker/copyright.sh /etc/profile.d/copyright.sh
 
-# 用 /etc/profile.d 脚本替代往 ~/.bashrc 追加，所有用户登录自动生效
-RUN printf 'source /usr/local/Ascend/ascend-toolkit/set_env.sh\nexport LLVM_INSTALL_PREFIX=/usr/local/llvm-install\nalias ll="ls -l"\nbash /etc/profile.d/copyright.sh\n' \
-        > /etc/profile.d/ascend-env.sh \
-    && chmod 644 /etc/profile.d/ascend-env.sh \
-    && chmod 555 /etc/profile.d/copyright.sh
+# Note: Set environment variables
+RUN \
+    CANN_TOOLKIT_ENV_FILE="/usr/local/Ascend/ascend-toolkit/set_env.sh" && \
+    echo "source ${CANN_TOOLKIT_ENV_FILE}" >> /etc/profile && \
+    echo "source ${CANN_TOOLKIT_ENV_FILE}" >> ~/.bashrc && \
+    echo "alias ll='ls -l'" >> ~/.bashrc && \
+    echo "bash /etc/profile.d/copyright.sh" >> ~/.bashrc && \
+    echo "export LLVM_INSTALL_PREFIX=/usr/local/llvm-install" >> /etc/profile && \
+    echo "export LLVM_INSTALL_PREFIX=/usr/local/llvm-install" >> ~/.bashrc && \
+    chmod 555 /etc/profile.d/copyright.sh
 
 ENTRYPOINT ["/bin/bash", "-c", "\
     source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
