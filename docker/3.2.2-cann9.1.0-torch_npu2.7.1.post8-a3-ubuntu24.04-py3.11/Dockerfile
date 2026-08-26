@@ -71,8 +71,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # Note: Install CANN runtime dependencies
 RUN pip install --no-cache-dir --upgrade pip --index-url ${PIP_SOURCE}
 
-COPY cann/Ascend-cann-toolkit_9.1.0_linux-x86_64.run /root/Ascend-cann-toolkit.run
-COPY cann/Ascend-cann-A3-ops_9.1.0_linux-x86_64.run /root/Ascend-cann-ops.run
+COPY cann/Ascend-cann-toolkit_9.1.0_linux-aarch64.run /root/Ascend-cann-toolkit.run
+COPY cann/Ascend-cann-A3-ops_9.1.0_linux-aarch64.run /root/Ascend-cann-ops.run
 
 # Note: Install CANN Toolkit Development Kit Package
 RUN chmod +x ~/Ascend-cann-toolkit.run && \
