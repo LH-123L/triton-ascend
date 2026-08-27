@@ -2,6 +2,7 @@
 ARG PIP_SOURCE="https://mirrors.ustc.edu.cn/pypi/simple"
 # Stage 1: Install Python
 FROM docker.m.daocloud.io/library/debian:12 AS python-installer
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources
 
 # Python Environment variables
 ENV PATH=/usr/local/python3.11.15/bin:${PATH}
@@ -171,6 +172,7 @@ RUN \
 
 # Stage 5: Copy results from previous stages
 FROM docker.m.daocloud.io/library/debian:12 AS official-debian
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources
 
 ARG PIP_SOURCE
 ARG TARGETPLATFORM
