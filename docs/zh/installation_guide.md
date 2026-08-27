@@ -102,9 +102,11 @@ pip install -e .
     python3 setup.py install
     ```
 
-## 开发镜像
+## 镜像
 
-### 检查镜像版本
+### 开发镜像
+
+#### 检查镜像版本
 
 **表1** CANN版本与镜像标签对照表。
 <table style="table-layout: fixed; width: 100%; border-collapse: collapse;">
@@ -176,7 +178,7 @@ pip install -e .
   </tr>
 </table>
 
-### 镜像使用
+#### 镜像使用
 
 ```bash
 # 这里以 9.0.0-a3-ubuntu22.04-py3.11 为例
@@ -203,6 +205,62 @@ quay.io/ascend/cann:9.0.0-a3-ubuntu22.04-py3.11 \
 /bin/bash
 
 # 进入容器，可在前面的快速安装和源码安装中任选一种方式安装Triton-Ascend
+docker exec -u root -it triton-ascend_container /bin/bash
+```
+
+### 开箱即用镜像
+
+#### 镜像内关键组件
+
+| 组件              | 版本          |
+|-----------------|-------------|
+| Triton-Ascend   | 3.2.2       |
+| CANN            | 9.1.0       |
+| Torch-NPU       | 2.7.1.post8 |
+
+#### 镜像列表
+
+| 镜像标签                                                            | Dockerfile                                                                               | 镜像下载命令                                                                                            |
+|-----------------------------------------------------------------|------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-debian12-py3.11       | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-debian12-py3.11/Dockerfile)       | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-debian12-py3.11       |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-ubuntu24.04-py3.11    | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-ubuntu24.04-py3.11/Dockerfile)    | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-ubuntu24.04-py3.11    |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-openeuler24.03-py3.11 | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-openeuler24.03-py3.11/Dockerfile) | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-openeuler24.03-py3.11 |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-debian12-py3.11         | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-debian12-py3.11/Dockerfile)         | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-debian12-py3.11         |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-ubuntu24.04-py3.11      | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-ubuntu24.04-py3.11/Dockerfile)      | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-ubuntu24.04-py3.11      |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-openeuler24.03-py3.11   | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-openeuler24.03-py3.11/Dockerfile)   | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-a3-openeuler24.03-py3.11   |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-debian12-py3.11        | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-debian12-py3.11/Dockerfile)        | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-debian12-py3.11        |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-ubuntu24.04-py3.11     | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-ubuntu24.04-py3.11/Dockerfile)     | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-ubuntu24.04-py3.11     |
+| 3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-openeuler24.03-py3.11  | [Dockerfile](../../docker/3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-openeuler24.03-py3.11/Dockerfile)  | docker pull quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-950-openeuler24.03-py3.11  |
+
+更多镜像参见[OVERVIEW.md](../../docker/OVERVIEW.zh.md)
+
+#### 镜像使用
+
+```bash
+# 这里以 3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-ubuntu24.04-py3.11 为例
+docker run -u 0 -dit --shm-size=512g --name=triton-ascend_container \
+--security-opt seccomp=unconfined \
+--device=/dev/davinci0 \
+--device=/dev/davinci1 \
+--device=/dev/davinci2 \
+--device=/dev/davinci3 \
+--device=/dev/davinci4 \
+--device=/dev/davinci5 \
+--device=/dev/davinci6 \
+--device=/dev/davinci7 \
+--device=/dev/davinci_manager \
+--device=/dev/devmm_svm \
+--device=/dev/hisi_hdc \
+-v /usr/local/dcmi:/usr/local/dcmi \
+-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+-v /usr/local/sbin/npu-smi:/usr/local/sbin/npu-smi \
+-v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
+-v /home:/home \
+-v /etc/ascend_install.info:/etc/ascend_install.info \
+quay.io/ascend/triton:3.2.2-cann9.1.0-torch_npu2.7.1.post8-910b-ubuntu24.04-py3.11 \
+/bin/bash
+
+# 镜像已安装运行算子所需的基础组件（比如CANN, Torch-NPU, Triton-Ascend等），可直接运行样例
 docker exec -u root -it triton-ascend_container /bin/bash
 ```
 
