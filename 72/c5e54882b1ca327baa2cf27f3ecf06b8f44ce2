@@ -1,0 +1,70 @@
+build_npuir.py
+  s_af5ae045f86293::t_db81f3be9e82d0 11-15,17,19-23,25,34-36,46-47,52-54,64,74,78-79,83,85-86,91,93-94,97-101,103-117,129-130,132,141-143,145-168,171,175,177-178,182,184-189,191-192,200-201,207,209-210,215,220-223,225-227,233-237,243-244,246-255,258-261,264-271,274-278,282-287,291,295,300,302-303,304,309,310-313
+setup_ascend.py
+  s_143a123ecc7a7d::t_9999e753db3d30 292
+  s_8d8a9dfe54c5fc::t_72cbe221c74588 293
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "72c5e54882b1ca327baa2cf27f3ecf06b8f44ce2",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_143a123ecc7a7d": {
+      "agent_id": {
+        "tool": "trae-cue",
+        "id": "ai_tab-icr-53f3043f-aad0-4fb6-98ab-babd806627a8",
+        "model": "default"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "edit_kind": "file_edit",
+        "tool": "trae-cue",
+        "external_session_id": "icr-53f3043f-aad0-4fb6-98ab-babd806627a8",
+        "client_type": "ide",
+        "source_scene": "cue"
+      }
+    },
+    "s_8d8a9dfe54c5fc": {
+      "agent_id": {
+        "tool": "trae-code-edit",
+        "id": "ai_tab-202609011622060100011250578506F93",
+        "model": "default"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "client_type": "ide",
+        "source_scene": "cue",
+        "edit_kind": "file_edit",
+        "external_session_id": "202609011622060100011250578506F93",
+        "tool": "trae-code-edit"
+      }
+    },
+    "s_af5ae045f86293": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a8c485e380025aa780450c2",
+        "model": "Doubao-Seed-Evolving"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "tool_use_id": "6a9689c5c17b704e9afee3d3",
+        "client_type": "ide",
+        "session_id": "6a8c485e380025aa780450c2",
+        "tool_type": "builtin",
+        "source_scene": "agent",
+        "runtime_client": "trae-tob-git-ai",
+        "dedupe_key": "6a8c485e380025aa780450c2:6a9689c5c17b704e9afee3d3:afterEdit:7b5220cb",
+        "operation_id": "6a9689c5c17b704e9afee3d3",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "external_session_id": "6a8c485e380025aa780450c2",
+        "edit_kind": "file_edit"
+      }
+    }
+  }
+}
