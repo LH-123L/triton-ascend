@@ -1,0 +1,70 @@
+build_npuir.py
+  s_af5ae045f86293::t_db81f3be9e82d0 11-14,18-20,30-31,36-38,48,58,62-63,67,69-70,80-81,84,95-103,104,109,113,115-116,120,125-126,128-129,145-146,152,153-154,156-165,168-171,174-175,177-181,184-188,192-197,199,203,207-209
+setup_ascend.py
+  s_143a123ecc7a7d::t_9999e753db3d30 292
+  s_8d8a9dfe54c5fc::t_72cbe221c74588 293
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "0b6751dc5be8e16f2c16d393bfa90b7c84633018",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_143a123ecc7a7d": {
+      "agent_id": {
+        "tool": "trae-cue",
+        "id": "ai_tab-icr-53f3043f-aad0-4fb6-98ab-babd806627a8",
+        "model": "default"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "edit_kind": "file_edit",
+        "external_session_id": "icr-53f3043f-aad0-4fb6-98ab-babd806627a8",
+        "source_scene": "cue",
+        "client_type": "ide",
+        "tool": "trae-cue"
+      }
+    },
+    "s_8d8a9dfe54c5fc": {
+      "agent_id": {
+        "tool": "trae-code-edit",
+        "id": "ai_tab-202609011622060100011250578506F93",
+        "model": "default"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "tool": "trae-code-edit",
+        "edit_kind": "file_edit",
+        "external_session_id": "202609011622060100011250578506F93",
+        "source_scene": "cue",
+        "client_type": "ide"
+      }
+    },
+    "s_af5ae045f86293": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a8c485e380025aa780450c2",
+        "model": "Doubao-Seed-Evolving"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "session_id": "6a8c485e380025aa780450c2",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "runtime_client": "trae-tob-git-ai",
+        "tool_use_id": "6a9689c5c17b704e9afee3d3",
+        "client_type": "ide",
+        "dedupe_key": "6a8c485e380025aa780450c2:6a9689c5c17b704e9afee3d3:afterEdit:7b5220cb",
+        "source_scene": "agent",
+        "external_session_id": "6a8c485e380025aa780450c2",
+        "tool_type": "builtin",
+        "operation_id": "6a9689c5c17b704e9afee3d3",
+        "edit_kind": "file_edit"
+      }
+    }
+  }
+}
