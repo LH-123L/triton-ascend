@@ -1,0 +1,58 @@
+docs/zh/installation_guide.md
+  h_2ffed1ce84f729 113
+  s_a05b3324e8e2fc::t_93a9371d6d3ba0 120
+  s_af5ae045f86293::t_ddd256aa70466f 105-112,114-119,122
+  s_af5ae045f86293::t_8ff2c6415df335 104
+docs/en/installation_guide.md
+  s_af5ae045f86293::t_3190e6beea8b0a 105,120,122
+  s_af5ae045f86293::t_e7bbd8d0dd40cf 104,106-119,121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "da63961bcb507c43afe3929c5393b2b4e3194d15",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_a05b3324e8e2fc": {
+      "agent_id": {
+        "tool": "trae-code-edit",
+        "id": "ai_tab-2026090221401901000001717267506B5",
+        "model": "default"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "tool": "trae-code-edit",
+        "source_scene": "cue",
+        "client_type": "ide",
+        "external_session_id": "2026090221401901000001717267506B5",
+        "edit_kind": "file_edit"
+      }
+    },
+    "s_af5ae045f86293": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a8c485e380025aa780450c2",
+        "model": "Doubao-Seed-Evolving"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "tool_type": "builtin",
+        "operation_id": "6a9827f8c17b704e9afee446",
+        "edit_kind": "file_edit",
+        "source_scene": "agent",
+        "client_type": "ide",
+        "session_id": "6a8c485e380025aa780450c2",
+        "external_session_id": "6a8c485e380025aa780450c2",
+        "tool_use_id": "6a9827f8c17b704e9afee446",
+        "dedupe_key": "6a8c485e380025aa780450c2:6a9827f8c17b704e9afee446:afterEdit:df758aef",
+        "runtime_client": "trae-tob-git-ai"
+      }
+    }
+  }
+}
