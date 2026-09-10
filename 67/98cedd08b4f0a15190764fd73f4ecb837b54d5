@@ -1,0 +1,16 @@
+third_party/ascend/lib/TritonToLLVM/CMakeLists.txt
+  h_2ffed1ce84f729 13
+third_party/ascend/lib/TritonToLLVM/TritonToLLVM.cpp
+  h_2ffed1ce84f729 5,14-15,27-60,277-327,337-354,362-374,377,380,382-398
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "6798cedd08b4f0a15190764fd73f4ecb837b54d5",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  }
+}
