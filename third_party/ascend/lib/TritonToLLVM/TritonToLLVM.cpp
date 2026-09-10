@@ -2,6 +2,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/Pass/Pass.h"
@@ -10,6 +11,8 @@
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/LogicalResult.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cstdlib>
 
 namespace mlir {
 namespace triton {
@@ -21,6 +24,40 @@ namespace triton {
 using namespace mlir;
 
 namespace {
+
+static bool inlineAsmDebugEnabled() {
+  static const bool enabled = []() {
+    const char *env = std::getenv("TRITON_INLINE_ASM_DEBUG");
+    return env != nullptr && env[0] != '\0' && env[0] != '0';
+  }();
+  return enabled;
+}
+
+static int64_t getTensorNumElementsSafe(Value value) {
+  auto type = dyn_cast<RankedTensorType>(value.getType());
+  return type ? type.getNumElements() : 1;
+}
+
+// PTX trig SFU mnemonics (e.g. "cos.approx.f32 $0, $1;") that have no direct
+// Ascend equivalent and must be rewritten to tensor-level math ops instead of
+// going through the per-element inline-asm scalarization path.
+enum class TrigInlineAsmKind { Unknown, Sin, Cos, Tanh, Atan };
+
+static TrigInlineAsmKind classifyTrigInlineAsm(llvm::StringRef asmString) {
+  llvm::StringRef mnemonic = asmString.take_until([](char c) {
+    return c == '.' || c == ' ';
+  });
+  if (mnemonic == "sin")
+    return TrigInlineAsmKind::Sin;
+  if (mnemonic == "cos")
+    return TrigInlineAsmKind::Cos;
+  if (mnemonic == "tanh")
+    return TrigInlineAsmKind::Tanh;
+  if (mnemonic == "atan")
+    return TrigInlineAsmKind::Atan;
+  return TrigInlineAsmKind::Unknown;
+}
+
 struct TritonToLLVMPass
     : public mlir::triton::impl::TritonToLLVMBase<TritonToLLVMPass> {
   void runOnOperation() override;
@@ -237,6 +274,58 @@ static LogicalResult processVectorInlineAsm(triton::ElementwiseInlineAsmOp op,
   return success();
 }
 
+// Recognize PTX trig SFU inline asm (e.g. "cos.approx.f32 $0, $1;") that has
+// no equivalent instruction on Ascend. Rewriting it to the corresponding
+// tensor-level math op keeps the value as a whole-tensor op and avoids the
+// per-element scalarization path below, whose fully-unrolled extract/asm
+// sequence explodes the IR for large tiles (e.g. 64x64) and hangs codegen.
+struct TrigInlineAsmOpConversion
+    : OpRewritePattern<triton::ElementwiseInlineAsmOp> {
+  // Higher benefit than the generic per-element fallback so the greedy driver
+  // always prefers the tensor-level math rewrite for trig ops.
+  explicit TrigInlineAsmOpConversion(MLIRContext *context)
+      : OpRewritePattern<triton::ElementwiseInlineAsmOp>(context,
+                                                         /*benefit=*/10) {}
+
+  LogicalResult matchAndRewrite(triton::ElementwiseInlineAsmOp op,
+                                PatternRewriter &rewriter) const final {
+    TrigInlineAsmKind trig = classifyTrigInlineAsm(op.getAsmString());
+    if (trig == TrigInlineAsmKind::Unknown)
+      return failure();
+
+    if (inlineAsmDebugEnabled()) {
+      llvm::errs() << "[TritonToLLVM] TRIG inline asm rewritten to math: "
+                   << op.getAsmString() << ", result type "
+                   << op->getResult(0).getType() << " ("
+                   << getTensorNumElementsSafe(op->getResult(0))
+                   << " elements)\n";
+    }
+
+    Location loc = op.getLoc();
+    ValueRange args = op.getArgs();
+    SmallVector<Type> resultTypes(op.getResultTypes());
+    Operation *newOp = nullptr;
+    switch (trig) {
+    case TrigInlineAsmKind::Sin:
+      newOp = rewriter.create<math::SinOp>(loc, resultTypes, args);
+      break;
+    case TrigInlineAsmKind::Cos:
+      newOp = rewriter.create<math::CosOp>(loc, resultTypes, args);
+      break;
+    case TrigInlineAsmKind::Tanh:
+      newOp = rewriter.create<math::TanhOp>(loc, resultTypes, args);
+      break;
+    case TrigInlineAsmKind::Atan:
+      newOp = rewriter.create<math::AtanOp>(loc, resultTypes, args);
+      break;
+    case TrigInlineAsmKind::Unknown:
+      return failure();
+    }
+    rewriter.replaceOp(op, newOp->getResults());
+    return success();
+  }
+};
+
 } // namespace
 
 struct ElementwiseInlineAsmOpConversion
@@ -245,6 +334,24 @@ struct ElementwiseInlineAsmOpConversion
 
   LogicalResult matchAndRewrite(triton::ElementwiseInlineAsmOp op,
                                 PatternRewriter &rewriter) const final {
+    // Trig SFU asm is handled by TrigInlineAsmOpConversion as a whole-tensor
+    // math op. Never scalarize it here, otherwise the per-element loop is fully
+    // unrolled and explodes the IR for large tiles.
+    if (classifyTrigInlineAsm(op.getAsmString()) !=
+        TrigInlineAsmKind::Unknown)
+      return failure();
+
+    if (inlineAsmDebugEnabled()) {
+      int64_t numElems = getTensorNumElementsSafe(op->getResult(0));
+      llvm::errs() << "[TritonToLLVM] WARNING inline asm falls back to "
+                      "per-element lowering: "
+                   << op.getAsmString() << ", result type "
+                   << op->getResult(0).getType() << " (" << numElems
+                   << " elements)";
+      if (numElems > 256)
+        llvm::errs() << " -- LARGE TILE, may explode IR / hang codegen";
+      llvm::errs() << "\n";
+    }
     return op.getOperands().empty() ? processScalarInlineAsm(op, rewriter)
                                     : processVectorInlineAsm(op, rewriter);
   }
@@ -252,13 +359,43 @@ struct ElementwiseInlineAsmOpConversion
 
 void TritonToLLVMPass::runOnOperation() {
   auto module = getOperation();
+
+  if (inlineAsmDebugEnabled()) {
+    llvm::errs() << "[TritonToLLVM] === pass start (TRITON_INLINE_ASM_DEBUG "
+                    "enabled) ===\n";
+    module.walk([&](triton::ElementwiseInlineAsmOp op) {
+      llvm::errs() << "[TritonToLLVM] found inline asm: "
+                   << op.getAsmString() << ", result type "
+                   << op->getResult(0).getType() << " ("
+                   << getTensorNumElementsSafe(op->getResult(0))
+                   << " elements), operands=" << op.getNumOperands() << "\n";
+    });
+  }
+
   ConversionTarget target(getContext());
   target.addLegalDialect<tensor::TensorDialect, LLVM::LLVMDialect,
-                         arith::ArithDialect>();
+                         arith::ArithDialect, math::MathDialect>();
 
   RewritePatternSet patterns(&getContext());
-  patterns.add<ElementwiseInlineAsmOpConversion>(patterns.getContext());
-  if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
+  patterns.add<TrigInlineAsmOpConversion, ElementwiseInlineAsmOpConversion>(
+      patterns.getContext());
+  LogicalResult result =
+      applyPartialConversion(module, target, std::move(patterns));
+
+  if (inlineAsmDebugEnabled()) {
+    int remaining = 0;
+    module.walk([&](triton::ElementwiseInlineAsmOp op) {
+      llvm::errs() << "[TritonToLLVM] REMAINING inline asm after pass: "
+                   << op.getAsmString() << ", type "
+                   << op->getResult(0).getType() << "\n";
+      ++remaining;
+    });
+    llvm::errs() << "[TritonToLLVM] === pass done, result="
+                 << (succeeded(result) ? "success" : "FAILURE")
+                 << ", remaining inline asm ops=" << remaining << " ===\n";
+  }
+
+  if (failed(result)) {
     signalPassFailure();
   }
 }
