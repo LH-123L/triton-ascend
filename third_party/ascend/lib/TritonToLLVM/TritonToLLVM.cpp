@@ -11,7 +11,6 @@
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/LogicalResult.h"
-#include "llvm/Support/raw_ostream.h"
 
 namespace mlir {
 namespace triton {
@@ -342,8 +341,9 @@ void TritonToLLVMPass::runOnOperation() {
                          arith::ArithDialect, math::MathDialect>();
 
   RewritePatternSet patterns(&getContext());
-  patterns.add<ElementwiseInlineAsmOpConversion>(patterns.getContext());
-  if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
+  patterns.add<TrigInlineAsmOpConversion, ElementwiseInlineAsmOpConversion>(patterns.getContext());
+  LogicalResult result = applyPartialConversion(module, target, std::move(patterns));
+  if (failed(result)) {
     signalPassFailure();
   }
 }
