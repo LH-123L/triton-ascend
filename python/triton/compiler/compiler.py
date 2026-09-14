@@ -5,17 +5,19 @@ from .._C.libtriton import get_cache_invalidating_env_vars, ir
 from ..backends import backends
 from ..backends.compiler import Language
 from ..backends.compiler import BaseBackend, GPUTarget
-from .. import __version__, knobs
+from .. import __version__, knobs, JITFunction
 from ..runtime.autotuner import OutOfResources
 from ..runtime.cache import get_cache_manager, get_dump_manager, get_override_manager, get_cache_key
 from ..runtime.driver import driver
 from ..tools.disasm import get_sass
+from .errors import MLIRCompilationError
 from pathlib import Path
 import re
 import functools
 import os
 import time
 import copy
+import subprocess
 
 # - ^\s*tt\.func\s+ : match the start of the string, any leading whitespace, the keyword func,
 #    and any following whitespace
@@ -223,6 +225,51 @@ class CompileTimer:
         )
 
 
+def _run_shell(
+    command: str,
+    *,
+    environment: Mapping[str, str] | None = None,
+    cwd: Path | str | None = None,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    """Run a shell command and capture its output."""
+    completed = subprocess.run(
+        ["bash", "-c", command],
+        cwd=None if cwd is None else str(cwd),
+        env=None if environment is None else dict(environment),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if check and completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed ({completed.returncode}): {command}\n"
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
+    return completed
+
+
+def get_cpu() -> str:
+    """Return the current one-minute CPU load, or NA when unavailable."""
+    result = _run_shell(
+        "awk '{print $1}' /proc/loadavg 2>/dev/null || echo \"NA\"",
+        check=False,
+    )
+    return result.stdout.strip() or "NA"
+
+
+def get_mem() -> str:
+    """Return current memory usage as a percentage, or NA when unavailable."""
+    result = _run_shell(
+        "awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} "
+        "END {if(t) printf \"%.2f%%\\n\", (t-a)/t*100; else print \"NA\"}' "
+        "/proc/meminfo 2>/dev/null || echo \"NA\"",
+        check=False,
+    )
+    return result.stdout.strip() or "NA"
+
+
 def compile(src, target=None, options=None, _env_vars=None):
     compilation_listener = knobs.compilation.listener
     if compilation_listener:
@@ -283,6 +330,12 @@ def compile(src, target=None, options=None, _env_vars=None):
         **env_vars,
     }
     metadata["triton_version"] = __version__
+    if isinstance(src, ASTSource) and isinstance(src.fn, JITFunction):
+        comptime_launch_metadata = {
+            "constexpr_signature":
+                src.fn.__name__ + "(" + ", ".join([f"{src.fn.params[k[0]].name}={v}" for k, v in src.constants.items()]) + ")"
+        }
+        metadata["comptime"] = comptime_launch_metadata
     # run compilation pipeline  and populate metadata
     stages = dict()
     backend.add_stages(stages, options, src.language)
@@ -317,11 +370,49 @@ def compile(src, target=None, options=None, _env_vars=None):
     if ir_source and use_ir_loc:
         module.create_location_snapshot(src.path)
         print(f"Creating new locations for {src.path}")
-
     if compilation_listener:
         timer.finished_ir_initialization()
+
+    kernel_name_temp = metadata["comptime"]
+    cpu_threshold, mem_threshold = 50, 0.7
+    while True:
+        cpu, mem = get_cpu(), get_mem()
+        if cpu == "NA" or mem == "NA":
+            time.sleep(1)
+        cpu_digital, mem_digital = float(cpu.strip()), float(cpu.strip().rstrip("%")) / 100
+        if cpu_digital < cpu_threshold and mem_digital < mem_threshold:
+            print(f"[time counter] cpu: {cpu}, mem: {mem}")
+            break
+    startTime = time.perf_counter()
+
     for ext, compile_ir in list(stages.items())[first_stage:]:
-        next_module = compile_ir(module, metadata)
+        try:
+            startTime_ext=time.perf_counter()
+            next_module = compile_ir(module, metadata)
+            endTime_ext = time.perf_counter()
+            print(f"[time counter] kernel_name: {kernel_name_temp}, costtime: {endTime_ext-startTime_ext}, ext: {ext}")
+        except Exception as e:
+            if (ext == "ttadapter"):
+                stage_name = "ConvertTritonIRToLinalgIR"
+            elif (ext == "npubin"):
+                stage_name = "ConvertLinalgIRToBinary"
+            elif (ext == "bcmlir"):
+                stage_name = "BytecodeToLinalgIRByBishengirOpt"
+            elif (ext == "mlirbc"):
+                stage_name = "LinalgIRToBytecodeByTritonMLIROpt"
+            else:
+                stage_name = "MLIRCompile"
+            if hasattr(e, 'stderr') and e.stderr:
+                error_detail = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else e.stderr
+            else:
+                error_detail = str(e)
+            from ..runtime.cache import FileCacheManager
+            if isinstance(fn_cache_manager, FileCacheManager):
+                error_detail += f"\n\n[INFO]: The compiled kernel cache is in {fn_cache_manager.cache_dir}\n\n"
+            else:
+                error_detail += f"\n\n[INFO]: The compiled kernel cache is {file_name}.{ext}\n\n"
+            print(f"[time counter] compile error")
+            raise MLIRCompilationError(stage_name, error_detail) from e
         ir_filename = f"{file_name}.{ext}"
         if fn_override_manager is None:
             # Users can override kernels at scale by setting `ir_override` in autotune config
@@ -347,6 +438,8 @@ def compile(src, target=None, options=None, _env_vars=None):
         module = next_module
         if compilation_listener:
             timer.stage_finished(ext)
+    endTime=time.perf_counter()
+    print(f"[time counter] compile_total_time: {endTime - startTime}")
     # write-back metadata
     metadata_group[metadata_filename] = fn_cache_manager.put(json.dumps(metadata, default=vars), metadata_filename,
                                                              binary=False)
@@ -420,8 +513,10 @@ class CompiledKernel:
         # stores the text of each level of IR that was generated during compilation
         asm_files = [Path(p) for c, p in metadata_group.items() if not c.endswith(".json")]
         binary_ext = backend.binary_ext
+        binary_extensions = getattr(backend, 'binary_extensions', {binary_ext})
         self.asm = AsmDict({
-            file.suffix[1:]: file.read_bytes() if file.suffix[1:] == binary_ext else file.read_text()
+            file.suffix[1:]:
+            file.read_bytes() if file.suffix[1:] in binary_extensions else file.read_text()
             for file in asm_files
         })
         self.metadata_group = metadata_group
@@ -463,7 +558,7 @@ class CompiledKernel:
             knobs.runtime.kernel_load_start_hook(self.module, self.function, self.name, self.metadata_group, self.hash)
         # TODO: n_regs, n_spills should be metadata generated when calling `ptxas`
         self.module, self.function, self.n_regs, self.n_spills, self.n_max_threads = driver.active.utils.load_binary(
-            self.name, self.kernel, self.metadata.shared, device)
+            self.metadata.kernel_name, self.kernel, self.metadata.shared, device, self.metadata.mix_mode)
         warp_size = driver.active.get_current_target().warp_size
         if self.metadata.num_warps * warp_size > self.n_max_threads:
             raise_(OutOfResources(self.metadata.num_warps * warp_size, self.n_max_threads, "threads"))
