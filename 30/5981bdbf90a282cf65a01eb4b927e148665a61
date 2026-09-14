@@ -2,6 +2,7 @@ third_party/ascend/backend/compiler.py
   s_6cd06cc813207b::t_99c6e498609dcf 509,512-516
   s_6cd06cc813207b::t_7e510c7308e58e 448
   s_6cd06cc813207b::t_ace32b3e1609ba 299-304
+  h_2ffed1ce84f729 1389
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -22,17 +23,17 @@ third_party/ascend/backend/compiler.py
       },
       "human_author": "LH-123L <liuhuan261@huawei.com>",
       "custom_attributes": {
-        "tool_type": "builtin",
-        "tool_use_id": "6aa79653d347c89122dca4d0",
-        "edit_kind": "file_edit",
-        "dedupe_key": "6aa770c8d347c89122dca331:6aa79653d347c89122dca4d0:afterEdit:f14f45f7",
-        "tool_id": "icube:applyChatSnapshotPatch",
         "external_session_id": "6aa770c8d347c89122dca331",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "tool_type": "builtin",
+        "edit_kind": "file_edit",
+        "tool_use_id": "6aa79653d347c89122dca4d0",
         "operation_id": "6aa79653d347c89122dca4d0",
         "source_scene": "agent",
         "client_type": "ide",
         "session_id": "6aa770c8d347c89122dca331",
-        "runtime_client": "trae-tob-git-ai"
+        "runtime_client": "trae-tob-git-ai",
+        "dedupe_key": "6aa770c8d347c89122dca331:6aa79653d347c89122dca4d0:afterEdit:f14f45f7"
       }
     }
   }
