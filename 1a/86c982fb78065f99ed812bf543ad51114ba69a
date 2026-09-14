@@ -24,17 +24,17 @@ setup_ascend.py
       },
       "human_author": "LH-123L <liuhuan261@huawei.com>",
       "custom_attributes": {
-        "runtime_client": "trae-tob-git-ai",
         "client_type": "ide",
-        "edit_kind": "file_edit",
-        "dedupe_key": "6a8c485e380025aa780450c2:6a923ca2b58e155aee9d4548:afterEdit:d32f48ae",
         "source_scene": "agent",
         "session_id": "6a8c485e380025aa780450c2",
-        "external_session_id": "6a8c485e380025aa780450c2",
-        "tool_use_id": "6a923ca2b58e155aee9d4548",
         "operation_id": "6a923ca2b58e155aee9d4548",
+        "dedupe_key": "6a8c485e380025aa780450c2:6a923ca2b58e155aee9d4548:afterEdit:d32f48ae",
+        "runtime_client": "trae-tob-git-ai",
         "tool_id": "icube:applyChatSnapshotPatch",
-        "tool_type": "builtin"
+        "edit_kind": "file_edit",
+        "tool_use_id": "6a923ca2b58e155aee9d4548",
+        "tool_type": "builtin",
+        "external_session_id": "6a8c485e380025aa780450c2"
       }
     }
   }
