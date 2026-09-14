@@ -23,10 +23,10 @@ setup_ascend.py
       },
       "human_author": "LH-123L <liuhuan261@huawei.com>",
       "custom_attributes": {
-        "edit_kind": "file_edit",
-        "external_session_id": "icr-53f3043f-aad0-4fb6-98ab-babd806627a8",
         "source_scene": "cue",
+        "external_session_id": "icr-53f3043f-aad0-4fb6-98ab-babd806627a8",
         "client_type": "ide",
+        "edit_kind": "file_edit",
         "tool": "trae-cue"
       }
     },
@@ -38,11 +38,11 @@ setup_ascend.py
       },
       "human_author": "LH-123L <liuhuan261@huawei.com>",
       "custom_attributes": {
-        "tool": "trae-code-edit",
         "edit_kind": "file_edit",
-        "external_session_id": "202609011622060100011250578506F93",
         "source_scene": "cue",
-        "client_type": "ide"
+        "external_session_id": "202609011622060100011250578506F93",
+        "client_type": "ide",
+        "tool": "trae-code-edit"
       }
     },
     "s_af5ae045f86293": {
@@ -53,17 +53,17 @@ setup_ascend.py
       },
       "human_author": "LH-123L <liuhuan261@huawei.com>",
       "custom_attributes": {
-        "session_id": "6a8c485e380025aa780450c2",
-        "tool_id": "icube:applyChatSnapshotPatch",
         "runtime_client": "trae-tob-git-ai",
         "tool_use_id": "6a9689c5c17b704e9afee3d3",
-        "client_type": "ide",
-        "dedupe_key": "6a8c485e380025aa780450c2:6a9689c5c17b704e9afee3d3:afterEdit:7b5220cb",
-        "source_scene": "agent",
         "external_session_id": "6a8c485e380025aa780450c2",
-        "tool_type": "builtin",
         "operation_id": "6a9689c5c17b704e9afee3d3",
-        "edit_kind": "file_edit"
+        "dedupe_key": "6a8c485e380025aa780450c2:6a9689c5c17b704e9afee3d3:afterEdit:7b5220cb",
+        "edit_kind": "file_edit",
+        "session_id": "6a8c485e380025aa780450c2",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "client_type": "ide",
+        "tool_type": "builtin",
+        "source_scene": "agent"
       }
     }
   }
