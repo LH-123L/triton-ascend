@@ -1,0 +1,37 @@
+third_party/ascend/backend/utils.py
+  h_2ffed1ce84f729 471-473,488-490
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "d2dcbaf4f03e8f7d3befb696320c47c2f0fc1c6e",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_a5899b7259c7f7": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa7f483d347c89122dca569",
+        "model": "Doubao-Seed-Evolving"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "client_type": "ide",
+        "operation_id": "6aa8b620d347c89122dca6d5",
+        "edit_kind": "file_edit",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "runtime_client": "trae-tob-git-ai",
+        "tool_type": "builtin",
+        "external_session_id": "6aa7f483d347c89122dca569",
+        "tool_use_id": "6aa8b620d347c89122dca6d5",
+        "source_scene": "agent",
+        "dedupe_key": "6aa7f483d347c89122dca569:6aa8b620d347c89122dca6d5:afterEdit:dcd32df5",
+        "session_id": "6aa7f483d347c89122dca569"
+      }
+    }
+  }
+}
