@@ -1,0 +1,46 @@
+docs/zh/build_entry_design.md
+  s_a5899b7259c7f7::t_0aa6562eb9441d 1-314
+third_party/ascend/backend/utils.py
+  h_2ffed1ce84f729 470-471,475-486,488-490,494-495,499-510,512-514
+.github/workflows/integration-tests-ascend.yml
+  s_a5899b7259c7f7::t_164c60276d3e9e 114,121
+.github/workflows/DynamicCVPipeline-ci.yml
+  s_a5899b7259c7f7::t_018dadb474e914 81,88,112,119
+setup.py
+  s_a5899b7259c7f7::t_859a4fe299d5f0 827-829
+  s_a5899b7259c7f7::t_85312d2b7dbda1 46-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "abf2aa08f713158b0ad4a6a62cab425c6a287337",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_a5899b7259c7f7": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa7f483d347c89122dca569",
+        "model": "Doubao-Seed-Evolving"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "external_session_id": "6aa7f483d347c89122dca569",
+        "client_type": "ide",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "session_id": "6aa7f483d347c89122dca569",
+        "tool_use_id": "6aa8b620d347c89122dca6d5",
+        "operation_id": "6aa8b620d347c89122dca6d5",
+        "dedupe_key": "6aa7f483d347c89122dca569:6aa8b620d347c89122dca6d5:afterEdit:dcd32df5",
+        "edit_kind": "file_edit",
+        "tool_type": "builtin",
+        "source_scene": "agent",
+        "runtime_client": "trae-tob-git-ai"
+      }
+    }
+  }
+}
