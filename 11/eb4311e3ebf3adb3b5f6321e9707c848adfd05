@@ -1,0 +1,49 @@
+third_party/ascend/build/setup_patch.py
+  s_a5899b7259c7f7::t_1dffcdf970abf6 387
+  s_a5899b7259c7f7::t_2f2e492094660c 9-12,337-342,361-365,530-532,548-556,560-562,568-580,586,592
+  s_a5899b7259c7f7::t_09cd3aed0d36bc 1-8,13-336,343-360,366-386,388-529,533-547,557-559,563-567,581-585,587-591
+third_party/ascend/build/npuir.py
+  s_a5899b7259c7f7::t_cd8e7ec1b9e3c6 1-201
+third_party/ascend/build/patches.py
+  s_a5899b7259c7f7::t_eed28b8f7b35a6 1-87,91-106,108-109
+  s_a5899b7259c7f7::t_07e51a4feb9432 88-90
+  s_a5899b7259c7f7::t_abacee9bdb2f84 107
+third_party/ascend/build/restore_sources.py
+  s_a5899b7259c7f7::t_373aaa3f43a2cc 1-25
+third_party/ascend/build/__init__.py
+  s_a5899b7259c7f7::t_bc437ccf0d78a9 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "11eb4311e3ebf3adb3b5f6321e9707c848adfd05",
+  "prompts": {},
+  "humans": {
+    "h_2ffed1ce84f729": {
+      "author": "LH-123L <liuhuan261@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_a5899b7259c7f7": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa7f483d347c89122dca569",
+        "model": "Doubao-Seed-Evolving"
+      },
+      "human_author": "LH-123L <liuhuan261@huawei.com>",
+      "custom_attributes": {
+        "tool_use_id": "6aa8b761d347c89122dca6ea",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "operation_id": "6aa8b761d347c89122dca6ea",
+        "runtime_client": "trae-tob-git-ai",
+        "source_scene": "agent",
+        "tool_type": "builtin",
+        "session_id": "6aa7f483d347c89122dca569",
+        "external_session_id": "6aa7f483d347c89122dca569",
+        "edit_kind": "file_edit",
+        "client_type": "ide",
+        "dedupe_key": "6aa7f483d347c89122dca569:6aa8b761d347c89122dca6ea:afterEdit:ea1eeb23"
+      }
+    }
+  }
+}
