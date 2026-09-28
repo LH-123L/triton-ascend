@@ -234,8 +234,7 @@ def _finalize_program_launch_policy(metadata, opt):
         ptsm_cap_authorized = True
 
     if opt.is_pure_simt:
-        auto_blockify_enabled = (_is_auto_map_parallel_blocks_enabled() and not has_auto_blockify_blacklist_op
-                                 and not row_coalescing_applied)
+        auto_blockify_enabled = _is_auto_map_parallel_blocks_enabled() and not row_coalescing_applied
     else:
         auto_blockify_enabled = (_is_auto_map_parallel_blocks_enabled() and not has_auto_blockify_blacklist_op
                                  and not ptsm_cap_authorized)
@@ -249,7 +248,7 @@ def _finalize_program_launch_policy(metadata, opt):
 
 def _adjust_metadata_by_module_result(mod, metadata, opt, **kwargs):
     rc = _get_then_remove_rc(mod, "triton_ascend.dynamic_cv_pipeline.rc")
-    if rc == 4:
+    if rc == 3:
         metadata["disable_vf_operand_substitution"] = True
         return
     if rc != -1 and rc > 0:
@@ -285,7 +284,6 @@ def _graph_optimize_kwargs(opt):
     kwargs = {
         "ub_capacity_bytes": graph_ub_budget_bytes_for_arch(opt.target_arch),
         "compile_mode": opt.compile_mode,
-        "compile_on_910_95": opt.compile_on_910_95,
     }
     rule_mask = getattr(opt, "rule_mask", DEFAULT_GRAPH_OPTIMIZATION_RULE_MASK)
     if rule_mask != DEFAULT_GRAPH_OPTIMIZATION_RULE_MASK:
@@ -398,7 +396,6 @@ def ttir_to_linalg(mod, metadata, opt, *, named_ops=False):
             metadata["set_workspace_multibuffer"] = 0
             metadata["enable_mixed_cv"] = True
             metadata["disable_auto_inject_block_sync"] = True
-            ascend.passes.ttir.set_enable_cube_block_merge(metadata["enable_cube_block_merge"])
 
             # Must run before add_dynamic_cv_pipeline because the driven
             # AddMultiBufferInnerScope pass reads the module-level
@@ -645,21 +642,6 @@ def get_common_bishengir_compile_options(metadata):
     return [bishengir_target_opt]
 
 
-def _needs_lib_call_no_inline(metadata):
-    arch = metadata['target'].arch
-    return arch.startswith("Ascend950")
-
-
-@functools.lru_cache()
-def _npu_compiler_supports_option(compiler_path: str, option: str) -> bool:
-    try:
-        result = subprocess.run([compiler_path, "--help"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                timeout=10, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return option in result.stdout
-
-
 def get_auto_bind_sub_block_option(metadata):
     # auto_tile_and_bind_subblock is read from the module.
     # enable_auto_bind_sub_block is set by the user and has a higher priority.
@@ -680,6 +662,12 @@ def _save_npuir_debug_output(stdout_bytes: bytes, stderr_bytes: bytes, tmpdir: s
 
     dump_manager = get_dump_manager(metadata_hash)
     dump_manager.put(Path(output_path).read_text(encoding='utf-8'), "kernel.npuir.mlir", binary=False)
+
+
+def _dump_kernel_binary(metadata_hash: str, bin_path: str):
+    """Copy the compiled kernel object into the TRITON_DEBUG dump directory."""
+    dump_manager = get_dump_manager(metadata_hash)
+    dump_manager.put(Path(bin_path).read_bytes(), os.path.basename(bin_path), binary=True)
 
 
 def try_compile_with_config(linalg: str, ub_config: Dict[str, Any], metadata: dict, opt) -> Tuple[bool, str]:
@@ -832,11 +820,6 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
             _compile_option_list += \
                 [f"--enable-mixed-cv={enable_mixed_cv}"]
 
-        enable_vf_fusion = metadata["enable_vf_fusion"]
-        if enable_vf_fusion is not None:
-            _compile_option_list += \
-                [f"--enable-vf-fusion={enable_vf_fusion}"]
-
         enable_dynamic_cv_pipeline = metadata["enable_dynamic_cv_pipeline"]
         if enable_dynamic_cv_pipeline == True and not metadata.get("disable_vf_operand_substitution", False):
             _compile_option_list += [f"--enable-vf-operand-substitution=True"]
@@ -878,12 +861,11 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
                 "--enable-hfusion-compile=true",
                 "--enable-triton-kernel-compile=true",
             ]
-            if (_needs_lib_call_no_inline(metadata)
-                    and _npu_compiler_supports_option(npu_compiler_path, "--enable-lib-call-no-inline")):
-                _compile_option_list += ["--enable-lib-call-no-inline=false"]
             # Temporary until the NPU compiler enables batch matmul by default in Q4.
             if metadata.get("enable_hivm_batch_matmul"):
                 _compile_option_list += ["--enable-hivm-batch-matmul"]
+            if metadata.get("enable_vf_stack_limit"):
+                _compile_option_list += ["--enable-vf-stack-limit"]
         bisheng_options = metadata["bisheng_options"]
         if bisheng_options is not None:
             _compile_option_list += [f"--append-bisheng-options={bisheng_options}"]
@@ -910,7 +892,7 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
 
         if opt.debug or os.getenv("TRITON_PRINT_AUTOTUNING", None) == "1":
             print_cmd_list = cmd_list.copy()
-            print_cmd_list[1], print_cmd_list[-1] = _get_dump_paths(metadata["hash"], ttadapter_path, bin_file)
+            print_cmd_list[1], print_cmd_list[-1] = _get_dump_paths(metadata["hash"], ttadapter_path, bin_path)
             print(f"[DEBUG] cmd_list: {shlex.join(print_cmd_list)}")
 
         try:
@@ -934,6 +916,9 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
             print(f"[DEBUG] {bin_path} is not found")
             print(f"[DEBUG] Stderr:\n{error_msg}")
             raise subprocess.CalledProcessError(ret.returncode, cmd_list, ret.stdout, ret.stderr)
+
+        if opt.debug:
+            _dump_kernel_binary(metadata["hash"], bin_path)
 
         if Path(callback_path).is_file():
             lib = ctypes.CDLL(callback_path)
@@ -983,6 +968,12 @@ def linalg_to_bin_enable_npu_compile_A2_A3(linalg: str, metadata, opt):
         if enable_ubuf_saving is not None:
             _compile_option_list += [
                 f"--enable-ubuf-saving={enable_ubuf_saving}",
+            ]
+
+        disable_size_align_for_cast = metadata["disable_size_align_for_cast"]
+        if disable_size_align_for_cast is not None:
+            _compile_option_list += [
+                f"--disable-size-align-for-cast={disable_size_align_for_cast}",
             ]
 
         enable_preload = metadata["enable_preload"]
@@ -1095,9 +1086,6 @@ def linalg_to_bin_enable_npu_compile_A2_A3(linalg: str, metadata, opt):
                 bishengir_hivm_opt,
                 "--enable-triton-kernel-compile=true",
             ]
-            if (_needs_lib_call_no_inline(metadata)
-                    and _npu_compiler_supports_option(npu_compiler_path, "--enable-lib-call-no-inline")):
-                _compile_option_list += ["--enable-lib-call-no-inline=false"]
 
         if opt.debug:
             _compile_option_list += ["--mlir-print-ir-after-failure"]
@@ -1108,7 +1096,7 @@ def linalg_to_bin_enable_npu_compile_A2_A3(linalg: str, metadata, opt):
 
         if opt.debug or os.getenv("TRITON_PRINT_AUTOTUNING", None) == "1":
             print_cmd_list = cmd_list.copy()
-            print_cmd_list[1], print_cmd_list[-1] = _get_dump_paths(metadata["hash"], ttadapter_path, bin_file)
+            print_cmd_list[1], print_cmd_list[-1] = _get_dump_paths(metadata["hash"], ttadapter_path, bin_path)
             print(f"[DEBUG] cmd_list: {shlex.join(print_cmd_list)}")
 
         try:
@@ -1131,6 +1119,9 @@ def linalg_to_bin_enable_npu_compile_A2_A3(linalg: str, metadata, opt):
             print(f"[DEBUG] {bin_path} is not found")
             print(f"[DEBUG] Stderr:\n{error_msg}")
             raise subprocess.CalledProcessError(ret.returncode, cmd_list, ret.stdout, ret.stderr)
+
+        if opt.debug:
+            _dump_kernel_binary(metadata["hash"], bin_path)
 
         if Path(callback_path).is_file():
             lib = ctypes.CDLL(callback_path)
@@ -1228,12 +1219,15 @@ class NPUOptions:
     multibuffer: bool = True
     vf_fusion_mode: str = None
     enable_ubuf_saving: bool = None
+    disable_size_align_for_cast: bool = None
     enable_preload: bool = None
     enable_auto_bind_sub_block: bool = None
     disable_tightly_coupled_buffer_reuse: bool = False
     enable_hivm_auto_cv_balance: bool = None
     # Temporary 910_95 switch; the NPU compiler plans to make this default in Q4.
     enable_hivm_batch_matmul: bool = False
+    # Only takes effect on the A5 non-pure-SIMT BiShengIR compilation path.
+    enable_vf_stack_limit: bool = False
     sync_solver: bool = None
     unit_flag: bool = None
     enable_flatten: bool = None
@@ -1250,7 +1244,6 @@ class NPUOptions:
     tile_mix_cube_loop: int = None
     disable_auto_inject_block_sync: bool = None
     enable_mixed_cv: bool = None
-    enable_vf_fusion: bool = None
     enable_dynamic_cv_pipeline: bool = None
     enable_cube_block_merge: bool = False
     hfusion_enable_multiple_consumer_fusion: bool = None
@@ -1267,15 +1260,17 @@ class NPUOptions:
     is_pure_simt: bool = field(default=False, init=False)
     # Only takes effect on the pure-SIMT path.
     shared_mem_dynamic_size: int = None
-    # A5 pure-SIMT-only option passed as -enable-bishengir-simt-optimization
+    # A5 pure-SIMT-only option passed as -simt-optimization-mode
     # to bishengir-compile. Its value grammar belongs to the toolchain.
-    enable_bishengir_simt_optimization: int = 000
+    # Individual digits are passed to various passes to control behavior,
+    # and are parsed right-to-left.
+    # For example, a value of 101 is interpreted as 0000101.
+    # If left as 0, bishengir-compile sets this to 900101
+    simt_optimization_mode: int = 0000000
     # Canonical modes: SIMD (D), SIMD with template-SIMT (P), and pure-SIMT
     # (T). ``unstructured_in_simt`` is an equivalent P spelling.
     compile_mode: str = "simd_simt_template"
     simt_stack_limit: int = None
-    # take effect on the reorder instruction pattern for SIMT. The pattern is disabled by default.
-    enable_simt_reorder_instruction: bool = False
     # disable simt fma optimization to get high precision
     disable_fma: bool = False
 
@@ -1287,11 +1282,62 @@ class NPUOptions:
     # unmasked kernels whose grid dims are compile-time known.
     grid_num_tiles: int = None
 
+    # Deprecated names remain visible to callers that use parse_options({})
+    # to distinguish compile options from kernel arguments. Their public
+    # values are ignored (or routed to canonical options) before construction.
+    add_auto_scheduling: bool = field(default=False, init=False)
+    allow_fp8e4nv: bool = field(default=False, init=False)
+    auto_blockify_size: int = field(default=1, init=False)
+    auto_tile_and_bind_subblock: bool = field(default=True, init=False)
+    code_motion: Optional[bool] = field(default=None, init=False)
+    enable_auto_blockify: Optional[bool] = field(default=None, init=False)
+    enable_bishengir_simt_optimization: int = field(default=0, init=False)
+    enable_buffer_insert_optimization: bool = field(default=True, init=False)
+    enable_cce_vf_auto_sync: Optional[bool] = field(default=None, init=False)
+    enable_cce_vf_remove_membar: Optional[bool] = field(default=None, init=False)
+    enable_cross_if_fusion: bool = field(default=False, init=False)
+    enable_drop_unit_dims: Optional[bool] = field(default=None, init=False)
+    enable_linearize: Optional[bool] = field(default=None, init=False)
+    enable_mask_fallback_conversion: bool = field(default=False, init=False)
+    enable_nd2nz_on_vector: bool = field(default=False, init=False)
+    enable_select_analysis: bool = field(default=True, init=False)
+    enable_simt_reorder_instruction: bool = field(default=False, init=False)
+    enable_sync_block_lock: Optional[bool] = field(default=None, init=False)
+    enable_ub_refine_opt: bool = field(default=False, init=False)
+    enable_vf_fusion: Optional[bool] = field(default=None, init=False)
+    force_simt_only: bool = field(default=False, init=False)
+    force_simt_template: bool = field(default=False, init=False)
+    graph_optimize_emit_remarks: bool = field(default=False, init=False)
+    graph_optimize_max_rewrites_per_function: int = field(default=64, init=False)
+    graph_optimize_rule_mask: int = field(default=DEFAULT_GRAPH_OPTIMIZATION_RULE_MASK, init=False)
+    graph_optimize_ub_capacity_bytes: Optional[int] = field(default=None, init=False)
+    has_auto_blockify_blacklist_op: Optional[bool] = field(default=None, init=False)
+    inter_cache_num: Optional[int] = field(default=None, init=False)
+    intra_cache_num: Optional[int] = field(default=None, init=False)
+    kernel_name: str = field(default="triton_", init=False)
+    llvm_version: int = field(default=15, init=False)
+    load_cache_num: Optional[int] = field(default=None, init=False)
+    mix_mode: str = field(default="", init=False)
+    ops_reorder: Optional[bool] = field(default=None, init=False)
+    optimize_dynamic_offset: bool = field(default=False, init=False)
+    simt_reorder_instruction: bool = field(default=False, init=False)
+    storage_align: Optional[bool] = field(default=None, init=False)
+    stream: Optional[int] = field(default=None, init=False)
+    use_bytecode: bool = field(default=True, init=False)
+
     def __post_init__(self, arch, rule_mask):
         from triton.backends.ascend import _apply_ascend_patch
 
         _apply_ascend_patch()
         object.__setattr__(self, "target_arch", arch)
+        # Plain init=False defaults live on the class. Materialize them in
+        # the instance because both Inductor and JIT inspect options.__dict__.
+        for name, option_field in self.__dataclass_fields__.items():
+            if not option_field.init and name not in self.__dict__:
+                object.__setattr__(self, name, option_field.default)
+        # Keep the legacy name discoverable while its property and all
+        # compiler decisions continue to use the injected target architecture.
+        self.__dict__["arch"] = arch
         if self.compile_on_910_95 is not None:
             _warn_deprecated_npu_option("compile_on_910_95")
         object.__setattr__(
@@ -1305,12 +1351,6 @@ class NPUOptions:
             raise ValueError(f"invalid GraphOptimize rule_mask: {error}") from error
         if normalized_rule_mask != DEFAULT_GRAPH_OPTIMIZATION_RULE_MASK:
             object.__setattr__(self, "rule_mask", normalized_rule_mask)
-        # The core compiler serializes ``options.__dict__`` into launch
-        # metadata.  An init=False field with its class-level default alone is
-        # not present there, so materialize the false state before the
-        # compile-mode branch may set it to true.
-        object.__setattr__(self, "is_pure_simt", False)
-
         if self.simt_stack_limit is not None:
             _validate_simt_stack_limit(self.simt_stack_limit)
 
@@ -1338,10 +1378,9 @@ class NPUOptions:
 def _get_npu_options_arch(options: NPUOptions) -> str:
     """Expose the injected target to the established lowering builder API.
 
-    ``arch`` is an ``InitVar`` rather than a user compile option, so it is not
-    stored or serialized.  The builder still reads ``options.arch`` while
-    creating TTIR, and this view returns the target injected by
-    ``AscendBackend.parse_options``.
+    ``arch`` is an ``InitVar`` rather than a user compile option. Its legacy
+    name is also serialized for option discovery, while this view always
+    returns the target injected by ``AscendBackend.parse_options``.
     """
     return options.target_arch
 
@@ -1364,7 +1403,7 @@ def _is_internal_npu_options(options, target_arch: str) -> bool:
 
 def _normalize_bishengir_simt_optimization_for_context(options: NPUOptions, raw_options) -> None:
     """Restrict the vendor SIMT optimization switch to its A5 pure-SIMT path."""
-    option_name = "enable_bishengir_simt_optimization"
+    option_name = "simt_optimization_mode"
     if option_name not in raw_options:
         return
 
@@ -1374,7 +1413,7 @@ def _normalize_bishengir_simt_optimization_for_context(options: NPUOptions, raw_
         return
 
     warnings.warn(
-        "enable_bishengir_simt_optimization only takes effect for A5 "
+        "simt_optimization_mode only takes effect for A5 "
         "pure-SIMT compilation; ignoring the explicit value.",
         UserWarning,
         stacklevel=3,
@@ -1403,24 +1442,26 @@ def ttir_to_npubin(mod, metadata, opt):
             _compile_option_list += ["--pure-simt"]
             _compile_option_list += [f"--num-warps={opt.num_warps}"]
             _compile_option_list += [f"--threads-per-warp={opt.warp_size}"]
-            if opt.enable_bishengir_simt_optimization != 000:
-                _compile_option_list += [
-                    f"--enable-bishengir-simt-optimization={opt.enable_bishengir_simt_optimization}"
-                ]
+            if opt.simt_optimization_mode != 0000000:
+                _compile_option_list += [f"--simt-optimization-mode={opt.simt_optimization_mode}"]
             _compile_option_list += [f"--simt-stack-limit={get_simt_stack_limit(opt.simt_stack_limit)}"]
             if opt.shared_mem_dynamic_size is not None:
                 _compile_option_list += [f"--shared-mem-dynamic-size={opt.shared_mem_dynamic_size}"]
-            if opt.enable_simt_reorder_instruction:
-                _compile_option_list += ["--enable-simt-reorder-instruction=true"]
             if opt.disable_fma:
                 _compile_option_list += [f"--disable-fma"]
+            if opt.compile_on_910_95:
+                npu_utils = NPUUtils()
+                if npu_utils.has_device_limit():
+                    _compile_option_list += [
+                        f"--custom-aic-number={npu_utils.get_aicore_num()}",
+                        f"--custom-aiv-number={npu_utils.get_aivector_core_num()}",
+                    ]
 
             bisheng_options = metadata["bisheng_options"]
             if bisheng_options is not None:
                 _compile_option_list += [f"--append-bisheng-options={bisheng_options}"]
 
-            if (_is_auto_map_parallel_blocks_enabled() and not metadata.get("has_auto_blockify_blacklist_op", False)
-                    and not metadata.get("row_coalescing_applied", False)):
+            if _is_auto_map_parallel_blocks_enabled() and not metadata.get("row_coalescing_applied", False):
                 _compile_option_list += ["--enable-auto-blockify-loop"]
                 if opt.superblock_factor > 1:
                     _compile_option_list += [f"--super-block-factor={opt.superblock_factor}"]
@@ -1498,10 +1539,10 @@ class AscendBackend(BaseBackend):
             # those provenance markers instead of depending on every public
             # field being present, which changes whenever the dataclass evolves.
             internal_options = _is_internal_npu_options(opts, self.target.arch)
-            # JIT validates the same dictionary after this call.  Remove public
-            # compatibility keys in place so Ascend can accept them without
-            # requiring any change to the community JIT implementation.
-            normalized_opts = opts if internal_options else _remove_deprecated_npu_options(opts, in_place=True)
+            # Normalize a copy, except for the legacy launch keyword below.
+            # NPUOptions retains compatibility defaults for legacy names so
+            # JIT and Inductor can still recognize them as compile options.
+            normalized_opts = opts if internal_options else _remove_deprecated_npu_options(opts)
             args = {k: normalized_opts[k] for k in option_names if k in normalized_opts}
             options = NPUOptions(arch=self.target.arch, **args)
             # Lazy init enable_dynamic_cv_pipeline if not provided.
@@ -1509,7 +1550,12 @@ class AscendBackend(BaseBackend):
             if options.enable_dynamic_cv_pipeline is None:
                 object.__setattr__(options, "enable_dynamic_cv_pipeline", options.compile_on_910_95)
             if not internal_options:
-                _normalize_bishengir_simt_optimization_for_context(options, opts)
+                _normalize_bishengir_simt_optimization_for_context(options, normalized_opts)
+                # Community JIT rejects the legacy launch keyword "stream"
+                # even when options.__dict__ recognizes it. Consume it at
+                # the Ascend boundary; the returned compatibility field stays
+                # None and the runtime still selects the current stream.
+                opts.pop("stream", None)
         else:
             raise NotImplementedError(f"Backend '{self.target.backend}' is not supported. "
                                       "Please ensure the target backend is set to 'npu'.")
@@ -1578,4 +1624,6 @@ class AscendBackend(BaseBackend):
         return str(version_key)
 
     def get_module_map(self) -> Dict[str, ModuleType]:
-        return {}
+        from triton.language.extra.cann import libdevice
+
+        return {"triton.language.extra.libdevice": libdevice}
