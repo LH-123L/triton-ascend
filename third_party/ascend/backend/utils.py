@@ -725,7 +725,10 @@ def _build_npu_ext(obj_name: str, header_or_src_path, src_path=None, *, kernel_l
                    extra_cflags=()) -> str:
     cc_cmd, so_path = _npu_ext_build_command(obj_name, header_or_src_path, src_path, kernel_launcher=kernel_launcher,
                                              precompile=precompile, extra_cflags=extra_cflags)
+    import time
+    starttime=time.perf_counter()
     result = subprocess.run(cc_cmd, capture_output=True, text=True)
+    print(f"successfully built {obj_name},cost {(time.perf_counter()-starttime)*1000} ms")
     if result.returncode != 0:
         raise RuntimeError(f"Failed to compile {header_or_src_path}, error: {result.stderr},cmd={cc_cmd}")
     return so_path
