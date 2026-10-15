@@ -17,16 +17,16 @@
 确定CANN、Python和TorchNPU软件版本并安装。其中，可以参考昇腾社区官网《[CANN快速安装](https://www.hiascend.com/cann/download)》
 完成驱动与固件安装。
 
-- CANN版本：9.1.0
+- CANN版本：9.2.0
 - Python版本：python3.11
-- TorchNPU版本：2.7.1.post8
+- TorchNPU版本：2.7.1.post11
 
 注：更多配套关系请参考[版本说明表](./release_note.md#版本兼容性矩阵)。
 
 ## 快速安装
 
 ```bash
-pip install triton-ascend --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
+pip install triton-ascend==3.2.2.post2  --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 ```
 
 ## 源码安装
@@ -98,6 +98,20 @@ pip install -e .
     TRITON_APPEND_CMAKE_ARGS="-DTRITON_BUILD_UT=OFF" \
     python3 setup.py install
     ```
+
+4. **(可选)Triton-distributed-ascend**：若使用[Triton-distributed-ascend](https://gitcode.com/Ascend/Triton-distributed-ascend)的功能，需源码编译shmem v1.7.0组件。
+
+4.1 获取源码：
+
+  ```bash
+    git clone https://gitcode.com/cann/shmem.git
+    cd shmem
+    git checkout v1.7.0
+  ```
+
+4.2 源码编译：
+
+参见 [shmem项目](https://gitcode.com/cann/shmem) README.md中 **"安装"->"方式三： 源码编译"** 章节。
 
 ## 开发镜像
 

@@ -20,16 +20,16 @@ Minimum hardware configuration: 32 GB memory per card (recommended)
 
 Determine and install the CANN, Python, and TorchNPU software versions. For the driver and firmware installation, you can refer to [CANN Quick Installation](https://www.hiascend.com/cann/download) on the Ascend community official website.
 
-- CANN version: 9.1.0
+- CANN version: 9.2.0
 - Python version: python3.11
-- TorchNPU version: 2.7.1.post8
+- TorchNPU version: 2.7.1.post11
 
 Note: For more compatibility relationships, please refer to the [Version Description Table](./release_note.md#version-compatibility-matrix).
 
 ## Quick Installation
 
 ```bash
-pip install triton-ascend --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
+pip install triton-ascend==3.2.2.post2 --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 ```
 
 ## Quick Start

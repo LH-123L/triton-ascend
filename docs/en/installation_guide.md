@@ -16,16 +16,16 @@
 
 Determine the CANN, Python, and TorchNPU software versions and install them. For the driver and firmware installation, refer to [CANN Quick Installation](https://www.hiascend.com/cann/download) on the official Ascend community website.
 
-- CANN version: 9.1.0
+- CANN version: 9.2.0
 - Python version: python3.11
-- TorchNPU version: 2.7.1.post8
+- TorchNPU version: 2.7.1.post11
 
 Note: For more compatibility relationships, refer to the [Release Notes](./release_note.md#version-compatibility-matrix).
 
 ## Quick Installation
 
 ```bash
-pip install triton-ascend --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
+pip install triton-ascend==3.2.2.post2  --extra-index-url=https://mirrors.huaweicloud.com/ascend/repos/pypi
 ```
 
 ## Source Installation
@@ -97,6 +97,20 @@ If you need to customize the LLVM build process, follow the steps below to compi
     TRITON_APPEND_CMAKE_ARGS="-DTRITON_BUILD_UT=OFF" \
     python3 setup.py install
     ```
+
+4. **(Optional) Triton-distributed-ascend**: If you use the features of [Triton-distributed-ascend](https://gitcode.com/Ascend/Triton-distributed-ascend), you need to build the shmem v1.7.0 component from source.
+
+4.1 Obtain the source code:
+
+  ```bash
+    git clone https://gitcode.com/cann/shmem.git
+    cd shmem
+    git checkout v1.7.0
+  ```
+
+4.2 Build from source:
+
+Refer to the **'Installation' -> 'Method 3: Source Code Compilation'** section in the README.md of the [shmem project](https://gitcode.com/cann/shmem).
 
 ## Development Images
 
