@@ -134,20 +134,6 @@ If you need to customize the LLVM build process, follow the steps below to compi
 
 Refer to the **'Installation' -> 'Method 3: Source Code Compilation'** section in the README.md of the [shmem project](https://gitcode.com/cann/shmem).
 
-4. **(Optional)Triton-distributed-ascend**: If you use the features of [Triton-distributed-ascend](https://gitcode.com/Ascend/Triton-distributed-ascend), you need to compile the shmem v1.7.0 component from source.
-
-4.1 Obtain the source code:
-
-```bash
-    git clone https://gitcode.com/cann/shmem.git
-    cd shmem
-    git checkout v1.7.0
-```
-
-4.2 Compile from source:
-
-Refer to the **'Installation' -> 'Method 3: Source Code Compilation'** section in the README.md of the [shmem project](https://gitcode.com/cann/shmem).
-
 ## Container Image Installation
 
 **Table 2** Selected Triton-Ascend Container Images
