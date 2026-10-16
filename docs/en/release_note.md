@@ -28,8 +28,6 @@ The following is the Triton-Ascend release schedule. Note that patch releases ar
 
 ### Triton-Ascend 3.6.0
 
-**First Release: Ascend NPU Support**
-
 Triton-Ascend is fully upgraded to work with the upstream Triton 3.6.0 release, keeping in sync with the latest community features and optimizations, and improving the operator development and runtime experience.
 
 #### Key Features
@@ -97,6 +95,7 @@ Maintenance branch statuses include:
 
 | Date       | Event                              |
 |------------|------------------------------------|
+| 2026-10-15 | Release stable version `3.6.0`     |
 | 2026-07-31 | Release stable version `3.2.2`     |
 | 2026-05-06 | Release stable version `3.2.1`     |
 | 2026-01-21 | Release stable version `3.2.0`     |
@@ -110,8 +109,8 @@ Maintenance branch statuses include:
 
 | Triton-Ascend | PyTorch  | TorchNPU Package | CANN    | SHMEM  | LLVM commit hash | Python              | LLVM Patch |
 |---------------|----------|------------------|---------|--------|------------------|---------------------|------------|
-| `main`        | `2.10.0` | `2.10.0.post7`   | `9.2.0` | v1.7.0 | `f6ded0b`        | `3.9~3.13`          | [llvm_patch_f6ded0b.patch](https://github.com/triton-lang/triton-ascend/blob/main/third_party/ascend/patch/llvm_patch_f6ded0b.patch) |
-| `3.6.0`       | `2.10.0` | `2.10.0.post7`   | `9.2.0` | v1.7.0 | `f6ded0b`        | `3.10~3.13`         | - |
+| `main`        | `2.10.0` | `2.10.0.post7`   | `9.2.0` | `v1.7.0` | `f6ded0b`        | `3.9~3.13`          | [llvm_patch_f6ded0b.patch](https://github.com/triton-lang/triton-ascend/blob/main/third_party/ascend/patch/llvm_patch_f6ded0b.patch) |
+| `3.6.0`       | `2.10.0` | `2.10.0.post7`   | `9.2.0` | `v1.7.0` | `f6ded0b`        | `3.10~3.13`         | - |
 | `3.2.2`       | `2.7.1`  | `2.7.1.post8`    | `9.1.0` | -      | `b5cc222`        | `3.9`(x86), `3.10-3.13` | -          |
 | `3.2.1`       | `2.7.1`  | `2.7.1.post8`    | `9.0.0` | -      | `b5cc222`        | `3.9`(x86), `3.10-3.13` | -          |
 | `3.2.0`       | `2.6.0`  | `2.6.0`          | `8.5.0` | -      | `b5cc222`        | `3.9-3.11`          | -          |

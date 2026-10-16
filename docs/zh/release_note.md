@@ -28,8 +28,6 @@ Triton-Ascend 版本提供了一个稳定的代码基础快照，封装成可以
 
 ### Triton-Ascend 3.6.0
 
-**首次发布：Ascend NPU 支持**
-
 Triton-Ascend 全面升级配套上游 Triton 3.6.0 版本，同步社区最新特性与优化，提升算子开发与运行体验。
 
 #### 主要特性
@@ -97,6 +95,7 @@ Triton-Ascend 遵循 [PEP 440](https://peps.python.org/pep-0440/) 版本规范�
 
 | 日期         | 事件                |
 |------------|-------------------|
+| 2026-10-15 | 发布稳定版本 `3.6.0`    |
 | 2026-07-31 | 发布稳定版本 `3.2.2`    |
 | 2026-05-06 | 发布稳定版本 `3.2.1`    |
 | 2026-01-21 | 发布稳定版本 `3.2.0`    |
@@ -110,8 +109,8 @@ Triton-Ascend 遵循 [PEP 440](https://peps.python.org/pep-0440/) 版本规范�
 
 | Triton-Ascend |  PyTorch | TorchNPU安装包     | CANN    | SHMEM  | LLVM commit hash | Python              | LLVM 补丁 |
 |---------------|---------|-----------------|---------|--------|------------------|---------------------|-----------|
-| `main`        | `2.10.0` | `2.10.0.post7`  | `9.2.0` | v1.7.0 | `f6ded0b`        | `3.9~3.13`          | [llvm_patch_f6ded0b.patch](https://github.com/triton-lang/triton-ascend/blob/main/third_party/ascend/patch/llvm_patch_f6ded0b.patch) |
-| `3.6.0`       | `2.10.0` | `2.10.0.post7`  | `9.2.0` | v1.7.0 | `f6ded0b`        | `3.10~3.13`             | - |
+| `main`        | `2.10.0` | `2.10.0.post7`  | `9.2.0` | `v1.7.0` | `f6ded0b`        | `3.9~3.13`          | [llvm_patch_f6ded0b.patch](https://github.com/triton-lang/triton-ascend/blob/main/third_party/ascend/patch/llvm_patch_f6ded0b.patch) |
+| `3.6.0`       | `2.10.0` | `2.10.0.post7`  | `9.2.0` | `v1.7.0` | `f6ded0b`        | `3.10~3.13`             | - |
 | `3.2.2`       | `2.7.1` | `2.7.1.post8`   | `9.1.0` | -      | `b5cc222`        | `3.9`(x86), `3.10-3.13` | -         |
 | `3.2.1`       | `2.7.1` | `2.7.1.post8`   | `9.0.0` | -      | `b5cc222`        | `3.9`(x86), `3.10-3.13` | -         |
 | `3.2.0`       | `2.6.0` | `2.6.0`         | `8.5.0` | -      | `b5cc222`        | `3.9-3.11`       | -         |
