@@ -26,10 +26,10 @@ env:
   REGISTRY: swr.cn-north-4.myhuaweicloud.com
   IMAGE_REPOSITORY: swr.cn-north-4.myhuaweicloud.com/opentile/triton
 
-  TRITON_ASCEND_VERSION: "3.6.0
+  TRITON_ASCEND_VERSION: "3.6.0"
   CANN_VERSION: "9.2.0"
   PYTORCH_VERSION: "2.10.0"
-  TORCH_NPU_VERSION: "2.10.0.post7
+  TORCH_NPU_VERSION: "2.10.0.post7"
   PYTHON_VERSION: "3.11.15"
   PYTHON_SERIES: "3.11"
 
