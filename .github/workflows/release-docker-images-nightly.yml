@@ -52,7 +52,7 @@ jobs:
           - name: ubuntu24.04
             base_image: ubuntu:24.04
           - name: openeuler24.03
-            base_image: openeuler:24.03
+            base_image: openeuler:24.03-lts
         platform:
           - arch: amd64
             runner: ubuntu-24.04
