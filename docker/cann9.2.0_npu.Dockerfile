@@ -137,6 +137,7 @@ RUN set -eux; \
         apt-get clean; \
         rm -rf /var/lib/apt/lists/* /var/tmp/*; \
     elif command -v yum >/dev/null 2>&1; then \
+        unset LD_LIBRARY_PATH PYTHONHOME PYTHONPATH; \
         yum -y update; \
         yum install -y \
             unzip \
@@ -235,6 +236,7 @@ RUN set -eux; \
         ln -sf /usr/bin/clang-15 /usr/bin/clang; \
         ln -sf /usr/bin/clang++-15 /usr/bin/clang++; \
     elif command -v yum >/dev/null 2>&1; then \
+        unset LD_LIBRARY_PATH PYTHONHOME PYTHONPATH; \
         yum -y update; \
         yum install -y \
             gcc \
