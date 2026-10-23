@@ -267,7 +267,7 @@ RUN set -eux; \
     git config --global http.postBuffer 524288000; \
     git config --global http.lowSpeedLimit 0; \
     git config --global http.lowSpeedTime 1800; \
-    git clone --no-checkout https://gitee.com/mirrors/llvm-project.git; \
+    git clone --no-checkout --filter=blob:none https://github.com/llvm/llvm-project.git; \
     cd llvm-project; \
     git checkout "${LLVM_COMMIT}"; \
     mkdir build; \
