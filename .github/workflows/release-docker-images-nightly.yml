@@ -74,11 +74,11 @@ jobs:
 
       - name: Log in to Huawei Cloud SWR
         if: ${{ env.PUSH_IMAGE == 'true' }}
-        uses: docker/login-action@v3
+        uses: huaweicloud/swr-login@v2.1.0
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.SWR_SOUTH_2_USERNAME }}
-          password: ${{ secrets.SWR_SOUTH_2_PASSWORD }}
+          region: cn-north-4
+          access-key-id: ${{ secrets.HUAWEI_CLOUD_AK }}
+          access-key-secret: ${{ secrets.HUAWEI_CLOUD_SK }}
 
       - name: Generate image tags
         id: tags
@@ -142,11 +142,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Huawei Cloud SWR
-        uses: docker/login-action@v3
+        uses: huaweicloud/swr-login@v2.1.0
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.SWR_SOUTH_2_USERNAME }}
-          password: ${{ secrets.SWR_SOUTH_2_PASSWORD }}
+          region: cn-north-4
+          access-key-id: ${{ secrets.HUAWEI_CLOUD_AK }}
+          access-key-secret: ${{ secrets.HUAWEI_CLOUD_SK }}
 
       - name: Generate image tag
         id: tags
