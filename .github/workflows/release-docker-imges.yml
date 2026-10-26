@@ -3,21 +3,21 @@ name: Patch Docker Copyright Notice
 on:
   workflow_dispatch:
     inputs:
-      output_suffix:
-        description: "新镜像 tag 的后缀；标准 tag 后追加 -<suffix>"
-        required: true
-        type: string
-        default: copyright-fixed
       push_images:
-        description: "是否推送新镜像到华为云 SWR"
+        description: "是否构建并覆盖推送 SWR 中的原镜像 tag"
         required: true
         type: boolean
         default: true
-      overwrite_images:
-        description: "允许覆盖已存在的新镜像 tag；默认禁止"
+      confirm_overwrite:
+        description: "我已确认：将覆盖 SWR 中的 9 个原始多架构 tag"
         required: true
         type: boolean
         default: false
+      backup_existing:
+        description: "覆盖前为原始多架构镜像创建带 run ID 的备份 tag"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -35,12 +35,30 @@ env:
   TORCH_NPU_VERSION: "2.10.0.post7"
   PYTHON_SERIES: "3.11"
   PUSH_IMAGES: ${{ inputs.push_images }}
-  OVERWRITE_IMAGES: ${{ inputs.overwrite_images }}
-  OUTPUT_SUFFIX: ${{ inputs.output_suffix }}
+  BACKUP_EXISTING: ${{ inputs.backup_existing }}
 
 jobs:
+  validate:
+    name: Validate overwrite confirmation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Require explicit overwrite confirmation
+        env:
+          PUSH: ${{ inputs.push_images }}
+          CONFIRMED: ${{ inputs.confirm_overwrite }}
+        run: |
+          set -euo pipefail
+          if [[ "${PUSH}" == "true" && "${CONFIRMED}" != "true" ]]; then
+            echo "Refusing to overwrite original SWR tags." >&2
+            echo "Enable confirm_overwrite to continue." >&2
+            exit 1
+          fi
+
   build:
     name: Patch ${{ matrix.device_type }}-${{ matrix.os.name }}-${{ matrix.platform.arch }}
+    needs: validate
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 120
 
@@ -65,17 +83,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate output suffix
-        env:
-          SUFFIX: ${{ inputs.output_suffix }}
-        run: |
-          set -euo pipefail
-          if [[ ! "${SUFFIX}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-            echo "Invalid output_suffix: ${SUFFIX}" >&2
-            echo "Use only letters, digits, dots, underscores, and hyphens." >&2
-            exit 1
-          fi
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -92,26 +99,14 @@ jobs:
         run: |
           set -euo pipefail
           base_tag="${TRITON_ASCEND_VERSION}-cann${CANN_VERSION}-torch_npu${TORCH_NPU_VERSION}-${{ matrix.device_type }}-${{ matrix.os.name }}-py${PYTHON_SERIES}"
-          patched_tag="${base_tag}-${{ matrix.platform.arch }}-${OUTPUT_SUFFIX}"
+          stage_tag="${base_tag}-copyright-stage-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform.arch }}"
 
           echo "base_tag=${base_tag}" >> "${GITHUB_OUTPUT}"
           echo "source_image=${IMAGE_REPOSITORY}:${base_tag}" >> "${GITHUB_OUTPUT}"
-          echo "patched_arch_image=${IMAGE_REPOSITORY}:${patched_tag}" >> "${GITHUB_OUTPUT}"
+          echo "staged_arch_image=${IMAGE_REPOSITORY}:${stage_tag}" >> "${GITHUB_OUTPUT}"
 
-          echo "Source image:        ${IMAGE_REPOSITORY}:${base_tag}"
-          echo "Patched arch image:  ${IMAGE_REPOSITORY}:${patched_tag}"
-
-      - name: Check destination tag
-        if: ${{ inputs.push_images && !inputs.overwrite_images }}
-        env:
-          DESTINATION_TAG: ${{ steps.tags.outputs.patched_arch_image }}
-        run: |
-          set -euo pipefail
-          if docker buildx imagetools inspect "${DESTINATION_TAG}" >/dev/null 2>&1; then
-            echo "Destination tag already exists: ${DESTINATION_TAG}" >&2
-            echo "Use another output_suffix or explicitly enable overwrite_images." >&2
-            exit 1
-          fi
+          echo "Source image:       ${IMAGE_REPOSITORY}:${base_tag}"
+          echo "Staged arch image:  ${IMAGE_REPOSITORY}:${stage_tag}"
 
       - name: Build patched image
         uses: docker/build-push-action@v6
@@ -124,13 +119,13 @@ jobs:
           outputs: ${{ inputs.push_images && 'type=registry,oci-mediatypes=false' || '' }}
           provenance: false
           sbom: false
-          tags: ${{ steps.tags.outputs.patched_arch_image }}
+          tags: ${{ steps.tags.outputs.staged_arch_image }}
           build-args: |
             BASE_IMAGE=${{ steps.tags.outputs.source_image }}
           labels: |
             org.opencontainers.image.title=Triton-Ascend
             org.opencontainers.image.description=Triton-Ascend ${{ env.TRITON_ASCEND_VERSION }} with updated copyright notice
-            org.opencontainers.image.version=${{ steps.tags.outputs.patched_arch_image }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.base_tag }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
@@ -169,38 +164,69 @@ jobs:
         run: |
           set -euo pipefail
           base_tag="${TRITON_ASCEND_VERSION}-cann${CANN_VERSION}-torch_npu${TORCH_NPU_VERSION}-${{ matrix.device_type }}-${{ matrix.os.name }}-py${PYTHON_SERIES}"
+          backup_tag="${base_tag}-copyright-backup-${{ github.run_id }}-${{ github.run_attempt }}"
+
           echo "base_tag=${base_tag}" >> "${GITHUB_OUTPUT}"
+          echo "backup_tag=${backup_tag}" >> "${GITHUB_OUTPUT}"
 
-      - name: Check final tag
-        if: ${{ !inputs.overwrite_images }}
-        env:
-          BASE_TAG: ${{ steps.tags.outputs.base_tag }}
-        run: |
-          set -euo pipefail
-          final_image="${IMAGE_REPOSITORY}:${BASE_TAG}-${OUTPUT_SUFFIX}"
-          if docker buildx imagetools inspect "${final_image}" >/dev/null 2>&1; then
-            echo "Destination tag already exists: ${final_image}" >&2
-            echo "Use another output_suffix or explicitly enable overwrite_images." >&2
-            exit 1
-          fi
-
-      - name: Create multi-architecture manifest
+      - name: Verify staged architecture images
         env:
           BASE_TAG: ${{ steps.tags.outputs.base_tag }}
         run: |
           set -euo pipefail
 
-          amd64_image="${IMAGE_REPOSITORY}:${BASE_TAG}-amd64-${OUTPUT_SUFFIX}"
-          arm64_image="${IMAGE_REPOSITORY}:${BASE_TAG}-arm64-${OUTPUT_SUFFIX}"
-          final_image="${IMAGE_REPOSITORY}:${BASE_TAG}-${OUTPUT_SUFFIX}"
+          amd64_image="${IMAGE_REPOSITORY}:${BASE_TAG}-copyright-stage-${{ github.run_id }}-${{ github.run_attempt }}-amd64"
+          arm64_image="${IMAGE_REPOSITORY}:${BASE_TAG}-copyright-stage-${{ github.run_id }}-${{ github.run_attempt }}-arm64"
 
           docker buildx imagetools inspect "${amd64_image}" >/dev/null
           docker buildx imagetools inspect "${arm64_image}" >/dev/null
+
+      - name: Verify original multi-architecture image
+        env:
+          BASE_TAG: ${{ steps.tags.outputs.base_tag }}
+        run: |
+          set -euo pipefail
+
+          original_image="${IMAGE_REPOSITORY}:${BASE_TAG}"
+          manifest="$(docker buildx imagetools inspect "${original_image}")"
+          grep -q "linux/amd64" <<<"${manifest}"
+          grep -q "linux/arm64" <<<"${manifest}"
+
+      - name: Back up original multi-architecture image
+        if: ${{ inputs.backup_existing }}
+        env:
+          BASE_TAG: ${{ steps.tags.outputs.base_tag }}
+          BACKUP_TAG: ${{ steps.tags.outputs.backup_tag }}
+        run: |
+          set -euo pipefail
+
+          original_image="${IMAGE_REPOSITORY}:${BASE_TAG}"
+          backup_image="${IMAGE_REPOSITORY}:${BACKUP_TAG}"
+
+          docker buildx imagetools create \
+            --tag "${backup_image}" \
+            "${original_image}"
+
+          echo "Backed up ${original_image} to ${backup_image}"
+
+      - name: Overwrite original multi-architecture tag
+        env:
+          BASE_TAG: ${{ steps.tags.outputs.base_tag }}
+        run: |
+          set -euo pipefail
+
+          amd64_image="${IMAGE_REPOSITORY}:${BASE_TAG}-copyright-stage-${{ github.run_id }}-${{ github.run_attempt }}-amd64"
+          arm64_image="${IMAGE_REPOSITORY}:${BASE_TAG}-copyright-stage-${{ github.run_id }}-${{ github.run_attempt }}-arm64"
+          final_image="${IMAGE_REPOSITORY}:${BASE_TAG}"
 
           docker buildx imagetools create \
             --tag "${final_image}" \
             "${amd64_image}" \
             "${arm64_image}"
 
-          echo "Published multi-architecture image:"
-          docker buildx imagetools inspect "${final_image}"
+          manifest="$(docker buildx imagetools inspect "${final_image}")"
+          grep -q "linux/amd64" <<<"${manifest}"
+          grep -q "linux/arm64" <<<"${manifest}"
+
+          echo "Overwrote original multi-architecture image:"
+          printf '%s\n' "${manifest}"
