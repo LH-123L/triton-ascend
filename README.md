@@ -100,8 +100,10 @@ pip install ninja cmake wheel pybind11 # build-time dependencies
 ```bash
 git clone https://github.com/triton-lang/triton-ascend.git && cd triton-ascend
 git checkout main
-pip install -e .
+pip install -e . --extra-index-url=https://repo.huaweicloud.com/repository/pypi/simple
 ```
+
+> Tip: Pass `--no-build-isolation` to `pip install` to make nop builds faster.
 
 #### Custom LLVM Build (Optional)
 
@@ -144,6 +146,22 @@ TRITON_WHEEL_NAME="triton-ascend" \
 TRITON_APPEND_CMAKE_ARGS="-DTRITON_BUILD_UT=OFF" \
 python3 setup.py install
 ```
+
+#### Verify the Installation
+
+Run:
+
+```bash
+python3 -c "import triton.backends.ascend as ascend;print('triton-ascend version:', ascend.__version__)"
+```
+
+If the output is:
+
+```bash
+triton-ascend version: <version>
+```
+
+Triton-Ascend is installed successfully.
 
 </details>
 </div>
