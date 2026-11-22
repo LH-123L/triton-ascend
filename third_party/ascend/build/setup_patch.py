@@ -738,6 +738,7 @@ def _build_setup_kwargs(mod, kwargs):
     readme = _REPO_ROOT / "README.md"
     if readme.exists():
         kwargs["long_description"] = readme.read_text(encoding="utf-8")
+        kwargs["long_description_content_type"] = "text/markdown"
 
     # install_requires
     kwargs["install_requires"] = _get_install_requirements()
